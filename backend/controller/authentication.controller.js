@@ -347,3 +347,104 @@ export const login = async (req, res) => {
     if (client) client.release();
   }
 };
+
+export const logout = async (req, res) => {
+  try {
+    res.clearCookie("auth_token", { path: "/" });
+    res.status(200).json({
+      success: true,
+      message: "Logout successful",
+      timestamp: new Date().toISOString(),
+    });
+    console.log(`User logged out at ${new Date().toISOString()}`);
+  } catch (error) {
+    console.error("Logout error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Logout failed",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+export const checkAuthController = async (req, res) => {
+  let client;
+
+  try {
+    const token = req.cookies.auth_token;
+
+    if (!token) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated",
+        authenticated: false,
+        timestamp: new Date().toISOString(),
+      });
+    }
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET);
+    } catch (jwtError) {
+      res.clearCookie("auth_token");
+      return res.status(401).json({
+        success: false,
+        message: "Authentication token is invalid or expired",
+        authenticated: false,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    client = await pool.connect();
+
+    const findUserQuery = `
+        SELECT id,email,first_name,last_name,phone,profile_picture_url,email_verified,is_active,last_login,created_at,preferences FROM users WHERE id = $1 AND is_active = true
+    `;
+
+    const userResult = await client.query(findUserQuery, [decoded.userId]);
+    if (userResult.rows.length === 0) {
+      res.clearCookie("auth_token");
+      return res.status(401).json({
+        success: false,
+        message: "User not found or account deactivated",
+        authenticated: false,
+        timestamp: new Date().toISOString(),
+      });
+    }
+    const user = userResult.rows[0];
+
+    const userResponse = {
+      id: user.id,
+      email: user.email,
+      firstName: user.first_name,
+      lastName: user.last_name,
+      phone: user.phone,
+      profilePictureUrl: user.profile_picture_url,
+      emailVerified: user.email_verified,
+      lastLogin: user.last_login,
+      createdAt: user.created_at,
+      preferences: user.preferences || {},
+    };
+    res.status(200).json({
+      success: true,
+      message: "User is authenticated",
+      authenticated: true,
+      data: {
+        user: userResponse,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Auth check error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Authentication check failed",
+      authenticated: false,
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+      timestamp: new Date().toISOString(),
+    });
+  } finally {
+    if (client) client.release();
+  }
+};
