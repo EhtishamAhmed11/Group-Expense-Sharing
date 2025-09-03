@@ -1,11 +1,18 @@
 import express from "express";
 import dotenv from "dotenv";
-import connectDB from "./database/db.js";
+import {connectDB} from "./connections/db.js";
+import { connectRedis, testRedis } from "./connections/connection.redis.js";
+import authRoutes from "./routes/authentication.routes.js";
+import cookieParser from "cookie-parser";
 dotenv.config();
-
 const app = express();
+app.use(express.json());
+app.use(cookieParser());
+
 const PORT = process.env.PORT;
-app.get("/helper", (req, res) => {
+
+app.use("/api/auth", authRoutes);
+app.get("/helper", (_, res) => {
   try {
     res.status(200).json({ message: "API is working" });
   } catch (error) {
@@ -13,10 +20,12 @@ app.get("/helper", (req, res) => {
     res.status(500).json({ message: "Internal Server Error" });
   }
 });
+
 app.listen(PORT, () => {
   try {
-    connectDB();
     console.log(`Server is listening on PORT:${PORT}`);
+    connectDB();
+    connectRedis();
   } catch (error) {
     console.log(`Error Starting Server:${error.message}`);
   }

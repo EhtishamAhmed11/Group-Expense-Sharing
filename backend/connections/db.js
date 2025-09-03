@@ -1,4 +1,11 @@
-import { Client } from "pg";
+import { Client, Pool } from "pg";
+
+export const pool = new Pool({
+  connectionString: "postgresql://postgres:0000@localhost:5432/expenseSharing",
+  max: 20,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 2000,
+});
 
 const client = new Client({
   host: "localhost",
@@ -8,7 +15,7 @@ const client = new Client({
   database: "expenseSharing",
 });
 
-const connectDB = async () => {
+export const connectDB = async () => {
   try {
     await client.connect();
     console.log(`Connected to Database:${client.database}`);
@@ -17,4 +24,3 @@ const connectDB = async () => {
   }
 };
 
-export default connectDB;
