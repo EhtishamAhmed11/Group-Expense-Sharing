@@ -1,8 +1,9 @@
 import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { error, timeStamp } from "console";
+
 import { pool } from "../connections/db.js";
+import { cacheService } from "../utils/cache.js";
 export const register = async (req, res) => {
   let client;
 
@@ -395,6 +396,22 @@ export const checkAuthController = async (req, res) => {
       });
     }
 
+    const cachedUser = await cacheService.getUserProfile(decoded.userId);
+    if (cachedUser) {
+      const { cached_at, expires_at, ...userResponse } = cachedUser;
+
+      return res.status(200).json({
+        success: true,
+        message: "User is authenticated (from cache)",
+        authenticated: true,
+        data: {
+          user: userResponse,
+        },
+        cached: true,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
     client = await pool.connect();
 
     const findUserQuery = `
@@ -425,6 +442,13 @@ export const checkAuthController = async (req, res) => {
       createdAt: user.created_at,
       preferences: user.preferences || {},
     };
+
+    cacheService
+      .setUserProfile(decoded.userId, userResponse)
+      .catch((error) =>
+        console.log(`Failed to cache user profile:`, error.message)
+      );
+
     res.status(200).json({
       success: true,
       message: "User is authenticated",
@@ -448,3 +472,108 @@ export const checkAuthController = async (req, res) => {
     if (client) client.release();
   }
 };
+
+export const updateProfile = async (req, res) => {
+  let client;
+  try {
+    const userId = req.userId;
+    const { firstName, lastName, phone, profilePictureUrl, preferences } =
+      req.body;
+    client = await pool.connect();
+
+    const findUserQuery = `
+      SELECT id,email,first_name,last_name FROM users WHERE id=$1
+    `;
+    const queryResult = await client.query(findUserQuery, [userId]);
+    if (queryResult.rows.length === 0) {
+      res.clearCookie("auth_token");
+      return res.status(401).json({
+        success: false,
+        message: "User not found or account deactivated",
+        authenticated: false,
+        timestamp: new Date().toISOString(),
+      });
+    }
+    const updateQuery = `
+      UPDATE users 
+      SET first_name = COALESCE($1, first_name),
+          last_name = COALESCE($2, last_name),
+          phone = COALESCE($3, phone),
+          profile_picture_url = COALESCE($4, profile_picture_url),
+          preferences = COALESCE($5, preferences),
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = $6
+        RETURNING id, email, first_name, last_name, phone, profile_picture_url, email_verified, created_at, preferences, last_login
+    `;
+    const resultData = {
+      firstName: firstName
+        ? firstName.toLowerCase().trim().replace(/[<>]/g, "")
+        : null,
+      lastName: lastName
+        ? lastName.toLowerCase().trim().replace(/[<>]/g, "")
+        : null,
+      phone: phone ? phone.trim().replace(/[<>]/g, "") : null,
+      profilePictureUrl: profilePictureUrl || null,
+      preferences: preferences || null,
+      userId: userId,
+    };
+    const updateResult = await client.query(updateQuery, [
+      resultData.firstName,
+      resultData.lastName,
+      resultData.phone,
+      resultData.profilePictureUrl,
+      resultData.preferences,
+      resultData.userId,
+    ]);
+
+    if (updateResult.rows.length === 0) {
+      return res.status(500).json({
+        success: false,
+        message: "Failed to update user profile",
+        timestamp: new Date().toISOString(),
+      });
+    }
+    await cacheService.invalidateUserCache(userId);
+
+    const updatedUser = updateResult.rows[0];
+
+    const userResponse = {
+      id: updatedUser.id,
+      email: updatedUser.email,
+      firstName: updatedUser.first_name,
+      lastName: updatedUser.last_name,
+      phone: updatedUser.phone,
+      profilePictureUrl: updatedUser.profile_picture_url,
+      emailVerified: updatedUser.email_verified,
+      lastLogin: updatedUser.last_login,
+      createdAt: updatedUser.created_at,
+      preferences: updatedUser.preferences || {},
+    };
+    cacheService
+      .setUserProfile(userId, userResponse)
+      .catch((error) =>
+        console.log(`Failed to cache user profile:`, error.message)
+      );
+
+    res.status(200).json({
+      success: true,
+      message: "Profile updated successfully",
+      data: { user: userResponse },
+    });
+    console.log(
+      `User profile updated: ${updatedUser.email} (ID: ${
+        updatedUser.id
+      }) at ${new Date().toISOString()}`
+    );
+  } catch (error) {
+    console.error("Update profile error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to update profile",
+    });
+  } finally {
+    if (client) client.release();
+  }
+};
+
+export const changePassword = async (req, res) => {};

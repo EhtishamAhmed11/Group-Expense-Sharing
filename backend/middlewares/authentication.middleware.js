@@ -10,7 +10,7 @@ export const authenticate = (req, res, next) => {
   }
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.userId = decoded.id;
+    req.userId = decoded.userId;
     req.userEmail = decoded.email;
     req.userEmailVerified = decoded.emailVerified;
     req.user = {

@@ -1,8 +1,10 @@
 import express from "express";
 import dotenv from "dotenv";
-import {connectDB} from "./connections/db.js";
+import { connectDB } from "./connections/db.js";
 import { connectRedis, testRedis } from "./connections/connection.redis.js";
 import authRoutes from "./routes/authentication.routes.js";
+import userRoutes from "./routes/user.routes.js";
+import expenseRoutes from "./routes/expense.routes.js";
 import cookieParser from "cookie-parser";
 dotenv.config();
 const app = express();
@@ -12,6 +14,8 @@ app.use(cookieParser());
 const PORT = process.env.PORT;
 
 app.use("/api/auth", authRoutes);
+app.use("/api/user", userRoutes);
+app.use("/api/expense", expenseRoutes);
 app.get("/helper", (_, res) => {
   try {
     res.status(200).json({ message: "API is working" });
