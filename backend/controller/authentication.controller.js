@@ -577,3 +577,76 @@ export const updateProfile = async (req, res) => {
 };
 
 export const changePassword = async (req, res) => {};
+
+
+// Add this function to your authentication.controller.js file
+
+export const checkTokenStatus = async (req, res) => {
+  try {
+    const token = req.cookies.auth_token;
+
+    // No token found
+    if (!token) {
+      return res.status(200).json({
+        success: true,
+        tokenExists: false,
+        authenticated: false,
+        message: "No authentication token found",
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // Token exists, now verify if it's valid
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET);
+      
+      // Token is valid, return success
+      return res.status(200).json({
+        success: true,
+        tokenExists: true,
+        authenticated: true,
+        tokenValid: true,
+        message: "Valid authentication token found",
+        userId: decoded.userId,
+        timestamp: new Date().toISOString(),
+      });
+      
+    } catch (jwtError) {
+      // Token exists but is invalid/expired
+      res.clearCookie("auth_token", { path: "/" });
+      
+      if (jwtError.name === 'TokenExpiredError') {
+        return res.status(200).json({
+          success: true,
+          tokenExists: true,
+          authenticated: false,
+          tokenValid: false,
+          expired: true,
+          message: "Authentication token has expired",
+          timestamp: new Date().toISOString(),
+        });
+      } else {
+        return res.status(200).json({
+          success: true,
+          tokenExists: true,
+          authenticated: false,
+          tokenValid: false,
+          expired: false,
+          message: "Authentication token is invalid",
+          timestamp: new Date().toISOString(),
+        });
+      }
+    }
+    
+  } catch (error) {
+    console.error("Token check error:", error);
+    
+    res.status(500).json({
+      success: false,
+      message: "Token validation failed",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+      timestamp: new Date().toISOString(),
+    });
+  }
+};

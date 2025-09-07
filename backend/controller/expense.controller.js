@@ -227,7 +227,6 @@ export const createPersonalExpense = async (req, res) => {
     console.error("Create personal expense error:", error);
 
     if (error.code === "23503") {
-      // Foreign key constraint violation
       return res.status(400).json({
         success: false,
         message: "Invalid reference data provided",
@@ -236,7 +235,6 @@ export const createPersonalExpense = async (req, res) => {
     }
 
     if (error.code === "23514") {
-      // Check constraint violation
       return res.status(400).json({
         success: false,
         message: "Data validation failed",
@@ -244,7 +242,6 @@ export const createPersonalExpense = async (req, res) => {
       });
     }
 
-    // Generic error response
     res.status(500).json({
       success: false,
       message: "Internal server error. Please try again later.",
@@ -277,65 +274,83 @@ export const getPersonalExpenses = async (req, res) => {
       minAmount,
       maxAmount,
       search,
+      match = "any", 
     } = req.query;
 
-    let whereConditions = ["e.created_by = $1 AND e.expense_type =$2"];
+    let whereConditions = ["e.created_by = $1 AND e.expense_type = $2"];
     let queryParams = [userId, "personal"];
     let paramIndex = 3;
 
     if (category) {
-      whereConditions.push(`ec.name ILIKE ${paramIndex}`);
-      queryParams.push(`%${category}`);
+      whereConditions.push(`ec.name ILIKE $${paramIndex}`);
+      queryParams.push(`%${category}%`);
       paramIndex++;
     }
 
     if (dateFrom) {
-      whereConditions.push(`e.expense_date >= ${paramIndex}`);
+      whereConditions.push(`e.expense_date >= $${paramIndex}`);
       queryParams.push(dateFrom);
       paramIndex++;
     }
+
     if (dateTo) {
-      whereConditions.push(`e.expense_date <= ${paramIndex}`);
+      whereConditions.push(`e.expense_date <= $${paramIndex}`);
       queryParams.push(dateTo);
       paramIndex++;
     }
+
     if (paymentMethod) {
-      whereConditions.push(`pe.payment_method =${paramIndex}`);
+      whereConditions.push(`pe.payment_method = $${paramIndex}`);
       queryParams.push(paymentMethod);
       paramIndex++;
     }
 
     if (minAmount) {
-      whereConditions.push(`e.amount >= ${paramIndex}`);
+      whereConditions.push(`e.amount >= $${paramIndex}`);
       queryParams.push(parseFloat(minAmount));
       paramIndex++;
     }
 
     if (maxAmount) {
-      whereConditions.push(`e.amount <= ${paramIndex}`);
+      whereConditions.push(`e.amount <= $${paramIndex}`);
       queryParams.push(parseFloat(maxAmount));
       paramIndex++;
     }
 
     if (recurring !== undefined) {
       const isRecurring = recurring === "true";
-      whereConditions.push(`pe.is_recurring =${paramIndex}`);
+      whereConditions.push(`pe.is_recurring = $${paramIndex}`);
       queryParams.push(isRecurring);
       paramIndex++;
     }
 
     if (tags) {
       const tagsArray = tags.split(",").map((tag) => tag.trim());
-      whereConditions.push(`pe.tag::text ILIKE ANY($${paramIndex})`);
-      queryParams.push(tagsArray.map((tag) => `%"${tag}"%`));
+
+      if (match === "all") {
+        // AND: require all tags to be present
+        whereConditions.push(`pe.tags @> $${paramIndex}::text[]`);
+        queryParams.push(tagsArray);
+      } else {
+        // ANY (default): partial match with OR
+        const likeTags = tagsArray.map((tag) => `%${tag}%`);
+        whereConditions.push(`
+          EXISTS (
+            SELECT 1 FROM unnest(pe.tags) t
+            WHERE t ILIKE ANY($${paramIndex})
+          )
+        `);
+        queryParams.push(likeTags);
+      }
+      paramIndex++;
     }
 
     if (search) {
       whereConditions.push(`(
         e.description ILIKE $${paramIndex} OR
         pe.location ILIKE $${paramIndex}
-        )`);
-      queryParams.push(`$${search}%`);
+      )`);
+      queryParams.push(`%${search}%`);
       paramIndex++;
     }
 
@@ -344,7 +359,7 @@ export const getPersonalExpenses = async (req, res) => {
     client = await pool.connect();
 
     const countQuery = `
-      SELECT COUNT (*) AS total
+      SELECT COUNT(*) AS total
       FROM expenses e
       LEFT JOIN personal_expenses pe ON e.id = pe.expense_id
       LEFT JOIN expense_categories ec ON e.category_id = ec.id
@@ -359,6 +374,7 @@ export const getPersonalExpenses = async (req, res) => {
         e.id,
         e.amount,
         e.description,
+        e.expense_date,
         e.receipt_url,
         e.notes,
         e.created_at,
@@ -388,7 +404,7 @@ export const getPersonalExpenses = async (req, res) => {
 
     const expenses = expenseResult.rows.map((row) => ({
       id: row.id,
-      amout: parseFloat(row.amount),
+      amount: parseFloat(row.amount),
       description: row.description,
       category: {
         id: row.category_id,
@@ -412,7 +428,7 @@ export const getPersonalExpenses = async (req, res) => {
     }));
 
     const totalAmount = expenses.reduce(
-      (sum, expense) => sum + expense.amout,
+      (sum, expense) => sum + expense.amount,
       0
     );
 
@@ -456,6 +472,7 @@ export const getPersonalExpenses = async (req, res) => {
     if (client) client.release();
   }
 };
+
 
 export const getExpenseById = async (req, res) => {
   let client;
@@ -593,7 +610,9 @@ export const getCategories = async (req, res) => {
       cached: false,
       timestamp: new Date().toISOString(),
     });
-    console.log(`Categories retrieved by user:${userId} at ${new Date().toISOString()}`)
+    console.log(
+      `Categories retrieved by user:${userId} at ${new Date().toISOString()}`
+    );
   } catch (error) {
     console.error("Get categories error:", error);
     res.status(500).json({
@@ -604,5 +623,616 @@ export const getCategories = async (req, res) => {
     });
   } finally {
     if (client) client.release();
+  }
+};
+export const getRecurringExpenses = async (req, res) => {
+  let client;
+  try {
+    const userId = req.userId;
+
+    client = await pool.connect();
+
+    const recurringQuery = `
+      SELECT
+        e.id,
+        e.amount,
+        e.description,
+        e.created_at,
+        ec.name AS category_name,
+        ec.icon AS category_icon,
+        ec.color AS category_color,
+        pe.recurring_type,
+        pe.recurring_interval,
+        pe.next_due_date,
+        pe.recurring_end_date
+      FROM expenses e
+      JOIN personal_expenses pe ON e.id = pe.expense_id
+      join expense_categories ec ON e.category_id = ec.id
+      WHERE e.created_by = $1
+        AND e.expense_type = 'personal'
+        AND pe.is_recurring = true
+        AND (pe.recurring_end_date IS NULL OR pe.recurring_end_date >= CURRENT_DATE )
+      ORDER BY pe.next_due_date ASC
+    `;
+
+    const result = await client.query(recurringQuery, [userId]);
+
+    const recurringExpenses = result.rows.map((row) => ({
+      id: row.id,
+      amount: parseFloat(row.amount),
+      description: row.description,
+      category: {
+        name: row.category_name,
+        icon: row.category_icon,
+        color: row.category_color,
+      },
+      recurringType: row.recurring_type,
+      recurringInterval: row.recurring_interval,
+      nextDueDate: row.next_due_date,
+      recurringEndDate: row.recurring_end_date,
+      daysUntilDue: Math.ceil(
+        (new Date(row.next_due_date) - new Date()) / (1000 * 60 * 60 * 24)
+      ),
+    }));
+
+    const upcomingSoon = recurringExpenses.filter(
+      (expense) => expense.daysUntilDue >= 0 && expense.daysUntilDue <= 7
+    );
+    res.status(200).json({
+      success: true,
+      data: {
+        recurringExpenses,
+        upcomingSoon,
+        totalRecurring: recurringExpenses.length,
+        upcomingCount: upcomingSoon.length,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Get recurring expenses error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error. Please try again later.",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+      timestamp: new Date().toISOString(),
+    });
+  } finally {
+    if (client) client.release();
+  }
+};
+
+export const updateExpense = async (req, res) => {
+  let client;
+  try {
+    const { id } = req.params;
+
+    const {
+      amount,
+      description,
+      categoryName,
+      notes,
+      expenseDate,
+      receiptUrl,
+      isRecurring,
+      recurringType,
+      recurringInterval,
+      recurringEndDate,
+      nextDueDate,
+      paymentMethod,
+      location,
+      tags,
+    } = req.body;
+    const userId = req.userId;
+
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        message: "Expense ID is required",
+        timestamp: new Date().toISOString(),
+      });
+    }
+    if (amount !== undefined && amount <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Amount should be greater than 0",
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    if (description !== undefined && !description.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Description cannot be empty",
+        timestamp: new Date().toISOString(),
+      });
+    }
+    client = await pool.connect();
+
+    const checkExpenseQuery = `
+      SELECT e.*, pe.*
+      FROM expenses e
+      JOIN personal_expenses pe ON e.id = pe.expense_id
+      WHERE e.id = $1 
+        AND e.created_by = $2 
+        AND e.expense_type = 'personal'
+        AND e.deleted_at IS NULL
+        AND pe.deleted_at IS NULL
+    `;
+    const existingExpenseResult = await client.query(checkExpenseQuery, [
+      id,
+      userId,
+    ]);
+    if (existingExpenseResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Expense not found or access denied",
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const existingExpense = existingExpenseResult.rows[0];
+
+    if (isRecurring === true) {
+      if (
+        !recurringType ||
+        ["weekly", "monthly", "yearly"].includes(recurringType)
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Valid recurring type is required for recurring expenses (weekly, monthly, yearly)",
+          timestamp: new Date().toISOString(),
+        });
+      }
+      if (!recurringInterval || recurringInterval < 1) {
+        return res.status(400).json({
+          success: false,
+          message: "Recurring interval must be at least 1",
+          timestamp: new Date().toISOString(),
+        });
+      }
+      if (!nextDueDate) {
+        return res.status(400).json({
+          success: false,
+          message: "Next due date is required for recurring expenses",
+          timestamp: new Date().toISOString(),
+        });
+      }
+    }
+    if (
+      paymentMethod &&
+      ![
+        "cash",
+        "credit_card",
+        "debit_card",
+        "digital_wallet",
+        "bank_transfer",
+      ].includes(paymentMethod)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid payment method",
+        timestamp: new Date().toISOString(),
+      });
+    }
+    let parsedExpenseDate;
+
+    if (expenseDate) {
+      parsedExpenseDate = new Date(expenseDate);
+      if (isNaN(parsedExpenseDate.getTime())) {
+        return res.status(400).json({
+          success: false,
+          message: "Please provide a valid expense date",
+          timestamp: new Date().toISOString(),
+        });
+      }
+    }
+    await client.query("BEGIN");
+
+    let categoryId = existingExpense.category_id;
+
+    if (categoryName && categoryName.trim()) {
+      const findCategoryQuery = `SELECT id FROM expense_categories WHERE name = $1 AND deleted_at IS NULL`;
+      const categoryResult = await client.query(findCategoryQuery, [
+        categoryName.trim(),
+      ]);
+
+      if (categoryResult.rows.length === 0) {
+        const color = getRandomHexColor();
+        const addCategoryQuery = `
+          INSERT INTO expense_categories(name,color,is_default,created_at) VALUES ($1,$2,false,CURRENT_TIMESTAMP)
+          RETURNING id
+        `;
+        const addCategoryResult = await client.query(addCategoryQuery, [
+          categoryName.trim(),
+          color,
+        ]);
+
+        categoryId = addCategoryResult.rows[0].id;
+      } else {
+        categoryId = categoryResult.rows[0].id;
+      }
+    }
+
+    const expenseUpdateFields = [];
+    const expenseUpdateValues = [];
+
+    let expenseParamIndex = 1;
+
+    if (amount !== undefined) {
+      expenseUpdateFields.push(`amount = $${expenseParamIndex}`);
+      expenseUpdateValues.push(parseFloat(amount));
+      expenseParamIndex++;
+    }
+
+    if (description !== undefined) {
+      expenseUpdateFields.push(`description = $${expenseParamIndex}`);
+      expenseUpdateValues.push(description.trim());
+      expenseParamIndex++;
+    }
+
+    if (categoryName && categoryName.trim()) {
+      expenseUpdateFields.push(`category_id = $${expenseParamIndex}`);
+      expenseUpdateValues.push(categoryId);
+      expenseParamIndex++;
+    }
+
+    if (expenseDate !== undefined) {
+      expenseUpdateFields.push(`expense_date = $${expenseParamIndex}`);
+      expenseUpdateValues.push(parsedExpenseDate);
+      expenseParamIndex++;
+    }
+    if (receiptUrl !== undefined) {
+      expenseUpdateFields.push(`receipt_url = $${expenseParamIndex}`);
+      expenseUpdateValues.push(receiptUrl);
+      expenseParamIndex++;
+    }
+    if (notes !== undefined) {
+      expenseUpdateFields.push(`notes = $${expenseParamIndex}`);
+      expenseUpdateValues.push(notes);
+      expenseParamIndex++;
+    }
+
+    expenseUpdateFields.push(`updated_at = CURRENT_TIMESTAMP`);
+
+    if (expenseUpdateFields.length > 1) {
+      expenseUpdateValues.push(id, userId);
+      const updateExpenseQuery = `
+        UPDATE expenses
+        SET ${expenseUpdateFields.join(", ")}
+        WHERE id = $${expenseParamIndex} AND created_by = $${
+        expenseParamIndex + 1
+      } RETURNING id ,amount , description,expense_date,updated_at
+      `;
+
+      await client.query(updateExpenseQuery, expenseUpdateValues);
+    }
+    const personalExpenseUpdateFields = [];
+    const personalExpenseUpdateValues = [];
+    let personalParamIndex = 1;
+
+    if (isRecurring !== undefined) {
+      personalExpenseUpdateFields.push(`is_recurring=$${personalParamIndex}`);
+      personalExpenseUpdateValues.push(isRecurring);
+      personalParamIndex++;
+
+      if (isRecurring === false) {
+        personalExpenseUpdateFields.push(`recurring_type = NULL`);
+        personalExpenseUpdateFields.push(`recurring_interval = NULL`);
+        personalExpenseUpdateFields.push(`recurring_end_date = NULL`);
+        personalExpenseUpdateFields.push(`next_due_date = NULL`);
+      } else {
+        if (recurringType !== undefined) {
+          personalExpenseUpdateFields.push(
+            `recurring_type = $${personalParamIndex}`
+          );
+          personalExpenseUpdateValues.push(recurringType);
+          personalParamIndex++;
+        }
+        if (recurringInterval !== undefined) {
+          personalExpenseUpdateFields.push(
+            `recurring_interval = $${personalParamIndex}`
+          );
+          personalExpenseUpdateValues.push(recurringInterval);
+          personalParamIndex++;
+        }
+        if (recurringEndDate !== undefined) {
+          personalExpenseUpdateFields.push(
+            `recurring_end_date = $${personalParamIndex}`
+          );
+          personalExpenseUpdateValues.push(recurringEndDate);
+          personalParamIndex++;
+        }
+        if (nextDueDate !== undefined) {
+          personalExpenseUpdateFields.push(
+            `next_due_date = $${personalParamIndex}`
+          );
+          personalExpenseUpdateValues.push(nextDueDate);
+          personalParamIndex++;
+        }
+      }
+    } else {
+      if (recurringType !== undefined) {
+        personalExpenseUpdateFields.push(
+          `recurring_type = $${personalParamIndex}`
+        );
+        personalExpenseUpdateValues.push(recurringType);
+        personalParamIndex++;
+      }
+      if (recurringInterval !== undefined) {
+        personalExpenseUpdateFields.push(
+          `recurring_interval = $${personalParamIndex}`
+        );
+        personalExpenseUpdateValues.push(recurringInterval);
+        personalParamIndex++;
+      }
+      if (recurringEndDate !== undefined) {
+        personalExpenseUpdateFields.push(
+          `recurring_end_date = $${personalParamIndex}`
+        );
+        personalExpenseUpdateValues.push(recurringEndDate);
+        personalParamIndex++;
+      }
+      if (nextDueDate !== undefined) {
+        personalExpenseUpdateFields.push(
+          `next_due_date = $${personalParamIndex}`
+        );
+        personalExpenseUpdateValues.push(nextDueDate);
+        personalParamIndex++;
+      }
+    }
+    if (paymentMethod !== undefined) {
+      personalExpenseUpdateFields.push(
+        `payment_method = $${personalParamIndex}`
+      );
+      personalExpenseUpdateValues.push(paymentMethod);
+      personalParamIndex++;
+    }
+
+    if (location !== undefined) {
+      personalExpenseUpdateFields.push(`location = $${personalParamIndex}`);
+      personalExpenseUpdateValues.push(location);
+      personalParamIndex++;
+    }
+
+    if (tags !== undefined) {
+      personalExpenseUpdateFields.push(`tags = $${personalParamIndex}`);
+      personalExpenseUpdateValues.push(tags);
+      personalParamIndex++;
+    }
+    personalExpenseUpdateFields.push(`updated_at = CURRENT_TIMESTAMP`);
+
+    if (personalExpenseUpdateFields.length > 1) {
+      personalExpenseUpdateValues.push(id);
+      const updatedPersonalExpenseQuery = `
+        UPDATE personal_expenses
+        SET ${personalExpenseUpdateFields.join(", ")}
+        WHERE expense_id = $${personalParamIndex}
+      `;
+
+      await client.query(
+        updatedPersonalExpenseQuery,
+        personalExpenseUpdateValues
+      );
+    }
+
+    const getUpdatedExpenseQuery = `
+      SELECT 
+        e.id,
+        e.amount,
+        e.description,
+        e.expense_date,
+        e.receipt_url,
+        e.notes,
+        e.created_at,
+        e.updated_at,
+        ec.id as category_id,
+        ec.name as category_name,
+        ec.icon as category_icon,
+        ec.color as category_color,
+        pe.id as personal_expense_id,
+        pe.is_recurring,
+        pe.recurring_type,
+        pe.recurring_interval,
+        pe.next_due_date,
+        pe.recurring_end_date,
+        pe.payment_method,
+        pe.location,
+        pe.tags
+      FROM expenses e
+      JOIN personal_expenses pe ON e.id = pe.expense_id
+      JOIN expense_categories ec ON e.category_id = ec.id
+      WHERE e.id = $1 AND e.created_by = $2
+    `;
+    const updatedExpenseResult = await client.query(getUpdatedExpenseQuery, [
+      id,
+      userId,
+    ]);
+    const updatedExpense = updatedExpenseResult.rows[0];
+
+    await client.query("COMMIT");
+
+    try {
+      await cacheService.invalidateUserExpenseCache(userId);
+      await cacheService.client.del(`categories:all`);
+    } catch (error) {
+      console.log(
+        `Cache invalidation failed for userId ${userId}:`,
+        cacheError.message
+      );
+    }
+    const responseExpense = {
+      id: updatedExpense.id,
+      amount: parseFloat(updatedExpense.amount),
+      description: updatedExpense.description,
+      category: {
+        id: updatedExpense.category_id,
+        name: updatedExpense.category_name,
+        icon: updatedExpense.category_icon,
+        color: updatedExpense.category_color,
+      },
+      expenseDate: updatedExpense.expense_date,
+      receiptUrl: updatedExpense.receipt_url,
+      notes: updatedExpense.notes,
+      personalExpenseId: updatedExpense.personal_expense_id,
+      isRecurring: updatedExpense.is_recurring,
+      recurringType: updatedExpense.recurring_type,
+      recurringInterval: updatedExpense.recurring_interval,
+      nextDueDate: updatedExpense.next_due_date,
+      recurringEndDate: updatedExpense.recurring_end_date,
+      paymentMethod: updatedExpense.payment_method,
+      location: updatedExpense.location,
+      tags: updatedExpense.tags || [],
+      createdAt: updatedExpense.created_at,
+      updatedAt: updatedExpense.updated_at,
+    };
+
+    res.status(200).json({
+      success: true,
+      message: "Personal expense updated successfully",
+      data: {
+        expense: responseExpense,
+      },
+      timestamp: new Date().toISOString(),
+    });
+    console.log(
+      `Personal expense updated: ${id} by user ${userId} at ${new Date().toISOString()}`
+    );
+  } catch (error) {
+    if (client) {
+      try {
+        await client.query("ROLLBACK");
+      } catch (rollbackError) {
+        console.error("Rollback error:", rollbackError);
+      }
+    }
+    console.error("Update personal expense error:", error);
+    if (error.code === "23503") {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid reference data provided",
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    if (error.code === "23514") {
+      return res.status(400).json({
+        success: false,
+        message: "Data validation failed",
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Internal server error. Please try again later.",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+      timestamp: new Date().toISOString(),
+    });
+  } finally {
+    if (client) {
+      client.release();
+    }
+  }
+};
+
+export const deleteExpense = async (req, res) => {
+  let client;
+
+  try {
+    const { id } = req.params;
+    const userId = req.userId;
+
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        message: "Expense ID is required",
+        timestamp: new Date().toISOString(),
+      });
+    }
+    client = await pool.connect();
+    const checkExpenseQuery = `
+      SELECT e.id, e.description, e.amount, pe.id as personal_expense_id
+      FROM expenses e
+      JOIN personal_expenses pe ON e.id = pe.expense_id
+      WHERE e.id = $1 
+        AND e.created_by = $2 
+        AND e.expense_type = 'personal'
+        AND e.deleted_at IS NULL
+        AND pe.deleted_at IS NULL
+    `;
+    const existingExpenseResult = await client.query(checkExpenseQuery, [
+      id,
+      userId,
+    ]);
+    if (existingExpenseResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Expense not found or access denied",
+        timestamp: new Date().toISOString(),
+      });
+    }
+    const existingExpense = existingExpenseResult.rows[0];
+
+    await client.query("BEGIN");
+
+    const deleteExpenseQuery = `
+      UPDATE expenses 
+      SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $1 AND created_by = $2
+    `;
+    await client.query(deleteExpenseQuery, [id, userId]);
+
+    const deletePersonalExpenseQuery = `
+      UPDATE personal_expenses 
+      SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+      WHERE expense_id = $1
+    `;
+    await client.query(deletePersonalExpenseQuery, [id]);
+
+    await client.query("COMMIT");
+
+    try {
+      await cacheService.invalidateUserExpenseCache(userId);
+    } catch (cacheError) {
+      console.log(
+        `Cache invalidation failed for userId ${userId}:`,
+        cacheError.message
+      );
+    }
+    res.status(200).json({
+      success: true,
+      message: "Personal expense deleted successfully",
+      data: {
+        deletedExpenseId: id,
+        deletedAt: new Date().toISOString(),
+      },
+      timestamp: new Date().toISOString(),
+    });
+    console.log(
+      `Personal expense deleted: ${id} (${existingExpense.description} - $${
+        existingExpense.amount
+      }) by user ${userId} at ${new Date().toISOString()}`
+    );
+  } catch (error) {
+    if (client) {
+      try {
+        await client.query("ROLLBACK");
+      } catch (rollbackError) {
+        console.error("Rollback error:", rollbackError);
+      }
+    }
+    console.error("Delete personal expense error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Internal server error. Please try again later.",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+      timestamp: new Date().toISOString(),
+    });
+  } finally {
+    if (client) {
+      client.release();
+    }
   }
 };
