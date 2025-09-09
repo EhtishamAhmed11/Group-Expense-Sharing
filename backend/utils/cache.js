@@ -15,6 +15,28 @@ class CacheService {
   generateUserStatsKey(userId) {
     return `user:${userId}:expenses:stats`;
   }
+
+  generateUserGroupsKey(userId) {
+    return `user:${userId}:groups`;
+  }
+  generateGroupCacheKey(groupId) {
+    return `group:${groupId}:details`;
+  }
+  generateGroupMembersKey(groupId) {
+    return `group:${groupId}:members`;
+  }
+  generateGroupExpensesKey(groupId) {
+    return `group:${groupId}:expenses:recent`;
+  }
+  generateGroupStatsKey(groupId) {
+    return `group:${groupId}:stats`;
+  }
+  generateGroupBalancesKey(groupId) {
+    return `group:${groupId}:balances`;
+  }
+  generateGroupInviteKey(inviteCode) {
+    return `invite:${inviteCode}:group`;
+  }
   async setUserProfile(userId, userData, ttl = this.defaultTTL) {
     try {
       const key = this.generateUserCacheKey(userId);
@@ -49,7 +71,6 @@ class CacheService {
       return null;
     }
   }
-
   async deleteUserProfile(userId) {
     try {
       const key = this.generateUserCacheKey(userId);
@@ -61,6 +82,147 @@ class CacheService {
       return false;
     }
   }
+  //group cache Methods
+
+  async setUserGroups(userId, groupsData, ttl = this.defaultTTL) {
+    try {
+      const key = this.generateUserGroupsKey(userId);
+      const serializedData = JSON.stringify({
+        groups: groupsData,
+        cachedAt: new Date().toISOString(),
+        expires_at: new Date(Date.now() + ttl * 1000).toISOString(),
+      });
+      await this.client.setEx(key, ttl, serializedData);
+      console.log(`Cached User groups for userId:${userId}`);
+      return true;
+    } catch (error) {
+      console.log(`Error setting user groups cache:${error.message}`);
+      return false;
+    }
+  }
+  async getUserGroups(userId) {
+    try {
+      const key = this.generateUserGroupsKey(userId);
+      const cachedData = await this.client.get(key);
+      if (cachedData) {
+        const parsedData = JSON.parse(cachedData);
+        console.log(`Cache hit user groups userId:${userId}`);
+        return parsedData.groups;
+      }
+      console.log(`Cache miss for user groups userId:${userId}`);
+      return null;
+    } catch (error) {
+      console.log(`Error getting user groups cache:${error.message}`);
+      return null;
+    }
+  }
+  async setGroupDetails(groupId, groupData, ttl = this.defaultTTL) {
+    try {
+      const key = this.generateGroupCacheKey(groupId);
+
+      const serializedData = JSON.stringify({
+        ...groupData,
+        cachedAt: new Date().toISOString,
+        expires_at: new Date(Date.now() + ttl * 1000).toISOString(),
+      });
+      await this.client.setEx(key, ttl, serializedData);
+      console.log(`Cached group details for groupId:${groupId}`);
+      return true;
+    } catch (error) {
+      console.log(`Error setting group details cache:${error.message}`);
+      return false;
+    }
+  }
+
+  async getGroupDetails(groupId) {
+    try {
+      const key = this.generateGroupCacheKey(groupId);
+      const cachedData = await this.client.get(key);
+      if (cachedData) {
+        const parsedData = JSON.parse(cachedData);
+        console.log(`Cache hit for group details groupId:${groupId}`);
+        return parsedData;
+      }
+      console.log(`Cache miss for group details groupId:${groupId}`);
+      return null;
+    } catch (error) {
+      console.log(`Error getting group details cache:${error.message}`);
+      return null;
+    }
+  }
+
+  async setGroupMembers(groupId, membersData, ttl = this.defaultTTL) {
+    try {
+      const key = this.generateGroupMembersKey(groupId);
+      const serializedData = JSON.stringify({
+        members: membersData,
+        cachedAt: new Date().toISOString(),
+        expires_at: new Date(new Date() + ttl * 1000).toISOString(),
+      });
+      await this.client.setEx(key, ttl, serializedData);
+      console.log(`Cached group members for groupId:${groupId}`);
+      return true;
+    } catch (error) {
+      console.log(`Error setting group members cache:${error.message}`);
+      return false;
+    }
+  }
+  async getGroupMembers(groupId) {
+    try {
+      const key = this.generateGroupMembersKey(groupId);
+      const cachedData = await this.client.get(key);
+
+      if (cachedData) {
+        const parsedData = JSON.parse(cachedData);
+        console.log(`Cache hit for group members groupId:${groupId}`);
+        return parsedData.members;
+      }
+      console.log(`Cache miss for group members groupId:${groupId}`);
+      return null;
+    } catch (error) {
+      console.log(`Error getting group members cache:${error.message}`);
+      return null;
+    }
+  }
+
+  async setGroupInviteCache(inviteCode, groupData, ttl = 24 * 60 * 60) {
+    // 24 hour TTL for invites
+    try {
+      const key = this.generateGroupInviteKey(inviteCode);
+      const serializedData = JSON.stringify({
+        ...groupData,
+        cachedAt: new Date().toISOString(),
+        expires_at: new Date(Date.now() + ttl * 1000).toISOString(),
+      });
+      await this.client.setEx(key, ttl, serializedData);
+      console.log(`Cached group invite for inviteCode:${inviteCode}`);
+      return true;
+    } catch (error) {
+      console.log(`Error setting group invite cache:${error.message}`);
+      return false;
+    }
+  }
+
+  async getGroupByInvite(inviteCode) {
+    try {
+      const key = this.generateGroupInviteKey(inviteCode);
+      const cachedData = await this.client.get(key);
+
+      if (cachedData) {
+        const parsedData = JSON.parse(cachedData);
+        console.log(`Cache hit for group invite:${inviteCode}`);
+        return parsedData;
+      }
+      console.log(`Cache miss for group invite:${inviteCode}`);
+      return null;
+    } catch (error) {
+      console.log(`Error getting group invite cache:${error.message}`);
+      return null;
+    }
+  }
+
+  //----------
+
   async isAvailable() {
     try {
       await this.client.ping();
@@ -102,6 +264,73 @@ class CacheService {
       return true;
     } catch (error) {
       console.log(`Error invalidating expense cache:${error.message}`);
+      return false;
+    }
+  }
+  async invalidateUserGroupCache(userId) {
+    try {
+      const key = this.generateUserGroupsKey(userId);
+      const result = await this.client.del(key);
+      console.log(`Invalidated user groups cache for userId:${userId}`);
+      return result > 0;
+    } catch (error) {
+      console.log(`Error invalidating user groups cache:${error.message}`);
+      return false;
+    }
+  }
+
+  async invalidateGroupCache(groupId) {
+    try {
+      const pattern = `group:${groupId}:*`;
+      const keys = await this.client.keys(pattern);
+
+      if (keys.length > 0) {
+        await this.client.del(keys);
+        console.log(
+          `Invalidated ${keys.length} group cache entries for groupId:${groupId}`
+        );
+      }
+      return keys.length;
+    } catch (error) {
+      console.log(`Error invalidating group cache:${error.message}`);
+      return 0;
+    }
+  }
+
+  async invalidateGroupMembersCache(groupId, memberUserIds = []) {
+    try {
+      const promises = [];
+
+      // Invalidate group-specific caches
+      promises.push(this.client.del(this.generateGroupMembersKey(groupId)));
+      promises.push(this.client.del(this.generateGroupCacheKey(groupId)));
+
+      // Invalidate each member's user groups cache
+      for (const userId of memberUserIds) {
+        promises.push(this.client.del(this.generateUserGroupsKey(userId)));
+      }
+
+      await Promise.all(promises);
+      console.log(
+        `Invalidated group members cache for groupId:${groupId} and ${memberUserIds.length} user caches`
+      );
+      return true;
+    } catch (error) {
+      console.log(`Error invalidating group members cache:${error.message}`);
+      return false;
+    }
+  }
+
+  async invalidateGroupInviteCache(inviteCode) {
+    try {
+      const key = this.generateGroupInviteKey(inviteCode);
+      const result = await this.client.del(key);
+      console.log(
+        `Invalidated group invite cache for inviteCode:${inviteCode}`
+      );
+      return result > 0;
+    } catch (error) {
+      console.log(`Error invalidating group invite cache:${error.message}`);
       return false;
     }
   }
