@@ -962,3 +962,215 @@ export const getMemberCount = async (req, res) => {
     if (client) client.release();
   }
 };
+
+export const updateGroup = async (req, res) => {
+  let client;
+  try {
+    const { id: groupId } = req.params;
+    const { name, description } = req.body;
+
+    const userId = req.userId;
+    if (!groupId) {
+      return res.status(400).json({
+        success: false,
+        message: "Group ID is required",
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "User authentication required",
+        timestamp: new Date().toISOString(),
+      });
+    }
+    if (!name && !description) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "At least one field (name or description) is required for update",
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    if (name && (name.trim().length < 2 || name.trim().length > 255)) {
+      return res.status(400).json({
+        success: false,
+        message: "Group name must be between 2 and 255 characters",
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    if (description && description.length > 1000) {
+      return res.status(400).json({
+        success: false,
+        message: "Group description cannot exceed 1000 characters",
+        timestamp: new Date().toISOString(),
+      });
+    }
+    client = await pool.connect();
+
+    const adminCheckQuery = `
+      SELECT 
+        g.name as current_name,
+        g.description as current_description,
+        g.created_by,
+        gm.role
+      FROM groups g
+      JOIN group_members gm ON g.id = gm.group_id
+      WHERE g.id = $1
+      AND gm.user_id = $2
+      AND g.is_active = true
+      AND gm.is_active = true    
+    `;
+    const adminCheck = await client.query(adminCheckQuery, [groupId, userId]);
+    if (adminCheck.rows.length === 0) {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied. Group not found or you are not a member",
+        timestamp: new Date().toISOString(),
+      });
+    }
+    const groupData = adminCheck.rows[0];
+    if (groupData.role !== "admin" && groupData.created_by !== userId) {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied. Admin privileges required to update group",
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const updateFields = [];
+    const updateValues = [];
+    let paramCounter = 1;
+
+    if (name) {
+      updateFields.push(`name = $${paramCounter}`);
+      updateValues.push(name.trim());
+      paramCounter++;
+    }
+    if (description !== undefined) {
+      updateFields.push(`description = $${paramCounter}`);
+      updateValues.push(description);
+      paramCounter++;
+    }
+    updateFields.push(`updated_at = CURRENT_TIMESTAMP`);
+
+    updateValues.push(groupId);
+
+    const updateQuery = `
+      UPDATE groups 
+      SET ${updateFields.join(", ")}
+      WHERE id = $${paramCounter} AND is_active = true
+      RETURNING id, name, description, member_count, created_by, created_at, updated_at
+    `;
+
+    const updateResult = await client.query(updateQuery, updateValues);
+
+    if (updateResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Group not found or could not be updated",
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const updatedGroup = updateResult.rows[0];
+
+    const membersQuery = `
+      SELECT user_id FROM group_members 
+      WHERE group_id = $1 AND is_active = true
+    `;
+    const membersResult = await client.query(membersQuery, [groupId]);
+    const memberIds = membersResult.rows.map((row) => row.user_id);
+
+    try {
+      const promises = [];
+
+      promises.push(cacheService.invalidateGroupCache(groupId));
+
+      for (const memberId of memberIds) {
+        promises.push(cacheService.invalidateUserGroupCache(memberId));
+        promises.push(
+          cacheService.invalidateMembershipCache(memberId, groupId)
+        );
+      }
+
+      await Promise.all(promises);
+    } catch (cacheError) {
+      console.log(`Cache invalidation error: ${cacheError.message}`);
+    }
+
+    const changes = [];
+    if (name && name !== groupData.current_name) {
+      changes.push(`name: "${groupData.current_name}" → "${name}"`);
+    }
+    if (
+      description !== undefined &&
+      description !== groupData.current_description
+    ) {
+      changes.push(`description updated`);
+    }
+
+    console.log(
+      `Group updated: ${groupId} by user: ${userId}. Changes: ${changes.join(
+        ", "
+      )}`
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Group updated successfully",
+      data: {
+        group: {
+          id: updatedGroup.id,
+          name: updatedGroup.name,
+          description: updatedGroup.description,
+          memberCount: updatedGroup.member_count,
+          createdBy: updatedGroup.created_by,
+          createdAt: updatedGroup.created_at,
+          updatedAt: updatedGroup.updated_at,
+        },
+        changes: changes,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error(`Error in updateGroup: ${error.message}`, {
+      groupId: req.params.id,
+      userId: req.userId,
+      stack: error.stack,
+    });
+
+    // Handle specific database errors
+    if (error.code === "22P02") {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid group ID format",
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    if (error.code === "23505") {
+      return res.status(409).json({
+        success: false,
+        message: "A group with this name already exists",
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to update group",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+      timestamp: new Date().toISOString(),
+    });
+  } finally {
+    if (client) {
+      client.release();
+    }
+  }
+};
+
+export const
