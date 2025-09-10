@@ -1173,4 +1173,205 @@ export const updateGroup = async (req, res) => {
   }
 };
 
-export const
+export const leaveGroup = async (req, res) => {
+  let client;
+  try {
+    const { id: groupId } = req.params;
+    const userId = req.userId;
+
+    if (!groupId) {
+      return res.status(400).json({
+        success: false,
+        message: "Group ID is required",
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "User authentication required",
+        timestamp: new Date().toISOString(),
+      });
+    }
+    client = await pool.connect();
+    await client.query("BEGIN");
+
+    const membershipQuery = `
+       SELECT 
+        gm.id as membership_id,
+        gm.role,
+        g.name as group_name,
+        g.created_by,
+        g.member_count,
+        (SELECT COUNT(*) FROM group_members WHERE group_id = g.id AND is_active = true AND role = 'admin') as admin_count
+      FROM group_members gm
+      JOIN groups g ON gm.group_id = g.id
+      WHERE gm.group_id = $1 
+        AND gm.user_id = $2 
+        AND gm.is_active = true 
+        AND g.is_active = true
+    `;
+    const membershipResult = await client.query(membershipQuery, [
+      groupId,
+      userId,
+    ]);
+    if (membershipResult.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return res.status(403).json({
+        success: false,
+        message:
+          "Access denied. You are not a member of this group or group does not exist",
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const membershipData = membershipResult.rows[0];
+
+    if (
+      membershipData.created_by === userId &&
+      membershipData.admin_count === 1 &&
+      membershipData.member_count > 1
+    ) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({
+        success: false,
+        message:
+          "Cannot leave group. You are the only admin. Please promote another member to admin first or transfer group ownership",
+        timestamp: new Date().toISOString(),
+      });
+    }
+    const unsettledExpensesQuery = `
+    SELECT COUNT(*) as unsettled_expenses
+    FROM expense_participants ep
+    JOIN expenses e ON ep.expense_id=e.id
+    WHERE e.group_id = $1
+      AND (ep.user_id = $2 OR e.paid_by=$2)
+      AND ep.is_settled = false
+      AND e.expense_type = 'group'    
+    `;
+    const unsettledResult = await client.query(unsettledExpensesQuery, [
+      groupId,
+      userId,
+    ]);
+    const unsettledCount = parseInt(unsettledResult.rows[0].unsettled_count);
+
+    if (unsettledCount > 0) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({
+        success: false,
+        message: `Cannot leave group. You have ${unsettledCount} unsettled expense(s). Please settle all expenses before leaving`,
+        data: {
+          unsettledExpenseCount: unsettledCount,
+        },
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    let groupDeactivated = false;
+    if (membershipData.member_count === 1) {
+      const deactivateGroupQuery = `
+        UPDATE groups 
+        SET is_active = false , updated_at = CURRENT_TIMESTAMP
+        WHERE id = $1
+      `;
+      await client.query(deactivateGroupQuery, [groupId]);
+      groupDeactivated = true;
+    }
+    const leaveMemberQuery = `
+      UPDATE group_members SET is_active = false WHERE id = $1 RETURNING role,joined_at
+    `;
+    const leaveResult = await client.query(leaveMemberQuery, [
+      membershipData.membership_id,
+    ]);
+
+    const remainingMembersQuery = `
+      SELECT user_id FROM group_members WHERE group_id = $1 AND is_active = true AND user_id !=$2
+    `;
+    const remainingMembersResult = await client.query(remainingMembersQuery, [
+      groupId,
+      userId,
+    ]);
+    const remainingMemberIds = remainingMembersResult.rows.map(
+      (row) => row.user_id
+    );
+
+    await client.query("COMMIT");
+
+    try {
+      const promises = [];
+      promises.push(cacheService.invalidateUserGroupCache(userId));
+      promises.push(cacheService.invalidateAllUserMemberships(userId));
+
+      if (!groupDeactivated) {
+        promises.push(cacheService.invalidateGroupCache(groupId));
+
+        for (const memberId of remainingMemberIds) {
+          promises.push(cacheService.invalidateUserGroupCache(memberId));
+          promises.push(
+            cacheService.invalidateMembershipCache(memberId, groupId)
+          );
+        }
+      }
+      await Promise.all(promises);
+    } catch (cacheError) {
+      console.log(`Cache invalidation error: ${cacheError.message}`);
+    }
+    console.log(
+      `User ${userId} left group ${groupId}. Group deactivated: ${groupDeactivated}`
+    );
+
+    res.status(200).json({
+      success: true,
+      message: groupDeactivated
+        ? "Successfully left group. Group has been deactivated as you were the last member"
+        : "Successfully left group",
+      data: {
+        leftGroup: {
+          id: groupId,
+          name: membershipData.group_name,
+          role: leaveResult.rows[0].role,
+          joinedAt: leaveResult.rows[0].joined_at,
+          leftAt: new Date().toISOString(),
+        },
+        groupDeactivated,
+        remainingMemberCount: groupDeactivated
+          ? 0
+          : membershipData.member_count - 1,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    if (client) {
+      try {
+        await client.query("ROLLBACK");
+      } catch (rollbackError) {
+        console.error("Error rolling back transaction:", rollbackError);
+      }
+    }
+    console.error(`Error in leaveGroup: ${error.message}`, {
+      groupId: req.params.id,
+      userId: req.userId,
+      stack: error.stack,
+    });
+
+    if (error.code === "22P02") {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid group ID format",
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to leave group",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+      timestamp: new Date().toISOString(),
+    });
+  } finally {
+    if (client) client.release();
+  }
+};
+
+
