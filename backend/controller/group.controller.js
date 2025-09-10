@@ -1374,4 +1374,134 @@ export const leaveGroup = async (req, res) => {
   }
 };
 
+export const transferGroupOwnership = async (req, res) => {
+  let client;
+  try {
+    const { id: groupId } = req.params;
+    const { newOwnerId } = req.body;
+    const currentUserId = req.userId;
+    if (!groupId || !newOwnerId) {
+      return res.status(400).json({
+        success: false,
+        message: "Group ID and new owner ID are required",
+        timestamp: new Date().toISOString(),
+      });
+    }
 
+    if (currentUserId === newOwnerId) {
+      return res.status(400).json({
+        success: false,
+        message: "Cannot transfer ownership to yourself",
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    client = await pool.connect();
+    await client.query("BEGIN");
+    const ownershipCheckQuery = `
+      SELECT created_by, name 
+      FROM groups 
+      WHERE id = $1 AND is_active = true
+    `;
+    const ownershipResult = await client.query(ownershipCheckQuery, [groupId]);
+
+    if (ownershipResult.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({
+        success: false,
+        message: "Group not found",
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    if (ownershipResult.rows[0].created_by !== currentUserId) {
+      await client.query("ROLLBACK");
+      return res.status(403).json({
+        success: false,
+        message: "Only group creator can transfer ownership",
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    //checking if the newOwner is the member of group or not
+    const newOwnerCheckQuery = `
+      SELECT role FROM group_members 
+      WHERE group_id = $1 AND user_id = $2 AND is_active = true
+    `;
+    const newOwnerResult = await client.query(newOwnerCheckQuery, [
+      groupId,
+      newOwnerId,
+    ]);
+
+    if (newOwnerResult.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({
+        success: false,
+        message: "New owner must be an active member of the group",
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const transferQuery = `
+      UPDATE groups 
+      SET created_by = $1, updated_by = CURRENT_TIMESTAMP
+      WHERE id=$2
+    `;
+    await client.query(transferQuery, [newOwnerId, groupId]);
+    const promoteQuery = `
+      UPDATE group_members 
+      SET role = 'admin'
+      WHERE group_id =$1 AND user_id = $2 AND role !='admin'
+    `;
+    await client.query(promoteQuery, [groupId, newOwnerId]);
+
+    await client.query("COMMIT");
+
+    try {
+      await cacheService.invalidateGroupCache(groupId);
+      await cacheService.invalidateUserGroupCache(currentUserId);
+      await cacheService.invalidateUserGroupCache(newOwnerId);
+      await cacheService.invalidateMembershipCache(currentUserId, groupId);
+      await cacheService.invalidateMembershipCache(newOwnerId, groupId);
+    } catch (cacheError) {
+      console.log(`Cache invalidation error: ${cacheError.message}`);
+    }
+
+    console.log(
+      `Group ownership transferred: ${groupId} from ${currentUserId} to ${newOwnerId}`
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Group ownership transferred successfully",
+      data: {
+        groupId,
+        groupName: ownershipResult.rows[0].name,
+        previousOwner: currentUserId,
+        newOwner: newOwnerId,
+        transferredAt: new Date().toISOString(),
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    if (client) {
+      try {
+        await client.query("ROLLBACK");
+      } catch (rollbackError) {
+        console.error("Error rolling back transaction:", rollbackError);
+      }
+    }
+
+    console.error(`Error in transferGroupOwnership: ${error.message}`);
+    res.status(500).json({
+      success: false,
+      message: "Failed to transfer group ownership",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+      timestamp: new Date().toISOString(),
+    });
+  } finally {
+    if (client) {
+      client.release();
+    }
+  }
+};
