@@ -334,6 +334,16 @@ class CacheService {
       return false;
     }
   }
+
+  async invalidateMembershipCache(userId, groupId) {
+  try {
+    const cacheKey = `membership:${userId}:${groupId}`;
+    await cacheService.client.del(cacheKey);
+    console.log(`Invalidated membership cache for user:${userId} group:${groupId}`);
+  } catch (error) {
+    console.log(`Failed to invalidate membership cache: ${error.message}`);
+  }
+};
 }
 
 export const cacheService = new CacheService();

@@ -5,6 +5,7 @@ import {
   getGroupDetail,
   getUserGroups,
 } from "../controller/group.controller.js";
+import { groupMemberAuth } from "../middlewares/memberValidation.middleware.js";
 const router = express.Router();
 
 router.route("/create").post(authenticate, createGroup);
