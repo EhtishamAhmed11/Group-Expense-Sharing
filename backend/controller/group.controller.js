@@ -628,3 +628,337 @@ export const getGroupDetail = async (req, res) => {
     }
   }
 };
+
+export const joinGroup = async (req, res) => {
+  let client;
+  try {
+    const { inviteCode } = req.body;
+    const userId = req.userId;
+    if (!inviteCode) {
+      return res.status(400).json({
+        success: false,
+        message: "Invite code is required",
+      });
+    }
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "User authentication required",
+      });
+    }
+
+    client = await pool.connect();
+    const findGroupQuery = `
+      SELECT id, name, description, invite_code, member_count, is_active, created_at, updated_at
+      FROM groups 
+      WHERE invite_code = $1 AND is_active = true
+    `;
+    const groupResult = await client.query(findGroupQuery, [inviteCode]);
+
+    if (groupResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Invalid invite code or group not found",
+      });
+    }
+
+    const group = groupResult.rows[0];
+    const checkMembershipQuery = `
+      SELECT 
+        gm.role, gm.joined_at, gm.is_active
+      FROM group_members gm
+      WHERE gm.user_id = $1 
+      AND gm.group_id = $2
+      AND gm.is_active = true
+    `;
+    const membershipResult = await client.query(checkMembershipQuery, [
+      userId,
+      group.id,
+    ]);
+
+    if (membershipResult.rows.length > 0) {
+      return res.status(409).json({
+        success: false,
+        message: "You are already a member of this group",
+        data: {
+          group: {
+            id: group.id,
+            name: group.name,
+            description: group.description,
+            memberCount: group.member_count,
+          },
+          membership: membershipResult.rows[0],
+        },
+      });
+    }
+    await client.query("BEGIN");
+    const joinMemberQuery = `
+      INSERT INTO group_members(group_id,user_id,role,joined_at,is_active) VALUES ($1,$2,'member',CURRENT_TIMESTAMP,true)
+      RETURNING id,role,joined_at,is_active
+    `;
+    const insertResult = await client.query(joinMemberQuery, [
+      group.id,
+      userId,
+    ]);
+
+    const updatedGroupQuery = `
+      SELECT id,name,description,member_count,created_at,updated_at FROM groups WHERE id=$1
+    `;
+    const updatedGroupResult = await client.query(updatedGroupQuery, [
+      group.id,
+    ]);
+
+    const existingMembersQuery = `
+      SELECT user_id FROM group_members
+      WHERE group_id =$1 AND user_id != $2 AND is_active = true
+    `;
+
+    const existingMembersResult = await client.query(existingMembersQuery, [
+      group.id,
+      userId,
+    ]);
+    const existingMemberIds = existingMembersResult.rows.map(
+      (row) => row.user_id
+    );
+    await client.query("COMMIT");
+
+    try {
+      await cacheService.invalidateCachesForNewMember(
+        userId,
+        group.id,
+        existingMemberIds
+      );
+      // await cacheService.invalidateGroupInviteCache(inviteCode);
+    } catch (cacheError) {
+      console.log(
+        `Don't fail the request if cache invalidation fails:${cacheError}`
+      );
+    }
+    res.status(200).json({
+      success: true,
+      message: "Successfully joined the group",
+      data: {
+        group: {
+          id: updatedGroupResult.rows[0].id,
+          name: updatedGroupResult.rows[0].name,
+          description: updatedGroupResult.rows[0].description,
+          memberCount: updatedGroupResult.rows[0].member_count,
+          createdAt: updatedGroupResult.rows[0].created_at,
+          updatedAt: updatedGroupResult.rows[0].updated_at,
+        },
+        membership: {
+          id: insertResult.rows[0].id,
+          role: insertResult.rows[0].role,
+          joinedAt: insertResult.rows[0].joined_at,
+          isActive: insertResult.rows[0].is_active,
+        },
+      },
+    });
+  } catch (error) {
+    if (client) {
+      try {
+        await client.query("ROLLBACK");
+      } catch (rollbackError) {
+        console.error("Error rolling back transaction:", rollbackError);
+      }
+    }
+    console.error("Error joining group:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error while joining group",
+    });
+  } finally {
+    if (client) client.release();
+  }
+};
+
+export const getGroupMemberList = async (req, res) => {
+  let client;
+  try {
+    const { id: groupId } = req.params;
+    const userId = req.userId;
+    if (!groupId) {
+      return res.status(400).json({
+        success: false,
+        message: "Group ID is required",
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "User authentication required",
+        timestamp: new Date().toISOString(),
+      });
+    }
+    try {
+      const cachedMembers = await cacheService.getGroupMembers(groupId);
+      if (cachedMembers) {
+        console.log(`Cache hit for group members:${groupId}`);
+        return res.status(200).json({
+          success: true,
+          data: {
+            members: cachedMembers,
+          },
+          cache: true,
+          timestamp: new Date().toISOString(),
+        });
+      }
+    } catch (cacheError) {
+      console.log(
+        `Cache read failed for group members:${groupId}:`,
+        cacheError.message
+      );
+    }
+
+    client = await pool.connect();
+
+    const getMembersQuery = `
+      SELECT 
+      u.id,
+        u.first_name,
+        u.last_name,
+        u.email,
+        u.profile_picture_url,
+        u.last_login,
+        gm.role,
+        gm.joined_at,
+        gm.is_active
+      FROM users u
+      JOIN group_members gm ON u.id = gm.user_id
+      WHERE gm.group_id = $1 
+        AND gm.is_active = true 
+        AND u.is_active = true
+      ORDER BY 
+        CASE WHEN gm.role = 'admin' THEN 1 ELSE 2 END,
+        gm.joined_at ASC
+    `;
+    const result = await client.query(getMembersQuery, [groupId]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "No active members found in this group",
+        timestamp: new Date().toISOString(),
+      });
+    }
+    const members = result.rows.map((member) => ({
+      id: member.id,
+      name: `${member.first_name} ${member.last_name}`.trim(),
+      firstName: member.first_name,
+      lastName: member.last_name,
+      email: member.email,
+      profilePictureUrl: member.profile_picture_url,
+      role: member.role,
+      isActive: member.is_active,
+      joinedAt: member.joined_at,
+      lastLogin: member.last_login,
+      isAdmin: member.role === "admin",
+      isCurrentUser: member.id === userId,
+    }));
+
+    const admins = members.filter((m) => m.role === "admin");
+    const regularMembers = members.filter((m) => m.role === "member");
+    const responseData = {
+      members,
+      summary: {
+        totalMembers: members.length,
+        adminCount: admins.length,
+        memberCount: regularMembers.length,
+      },
+      admins,
+      regularMembers,
+      cache: false,
+    };
+    try {
+      await cacheService.setGroupMembers(groupId, members, 10 * 60);
+    } catch (cacheError) {
+      console.log(`Failed to cache group members: ${cacheError.message}`);
+    }
+    res.status(200).json({
+      success: true,
+      data: responseData,
+      timestamp: new Date().toISOString(),
+    });
+
+    console.log(
+      `Members list retrieved for group: ${groupId} by user: ${userId} (${members.length} members)`
+    );
+  } catch (error) {
+    console.error(`Error in getGroupMemberList: ${error.message}`, {
+      groupId: req.params.id,
+      userId: req.userId,
+      stack: error.stack,
+    });
+
+    // Handle specific database errors
+    if (error.code === "22P02") {
+      // Invalid UUID format
+      return res.status(400).json({
+        success: false,
+        message: "Invalid group ID format",
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to retrieve group members",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+      timestamp: new Date().toISOString(),
+    });
+  } finally {
+    if (client) client.release();
+  }
+};
+
+export const getMemberCount = async (req, res) => {
+  let client;
+  try {
+    const { id: groupId } = req.params;
+    try {
+      const cachedGroup = await cacheService.getGroupDetails(groupId);
+      if (cachedGroup && cachedGroup.member_count !== undefined) {
+        return res.status(200).json({
+          success: true,
+          data: { memberCount: cachedGroup.member_count },
+          timestamp: new Date().toISOString(),
+        });
+      }
+    } catch (cacheError) {
+      console.log(`Cache read error: ${cacheError.message}`);
+    }
+    client = await pool.connect();
+
+    const countQuery = `
+      SELECT member_count 
+      FROM groups 
+      WHERE id = $1 AND is_active = true
+    `;
+
+    const result = await client.query(countQuery, [groupId]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Group not found",
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: { memberCount: result.rows[0].member_count },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error(`Error in getGroupMemberCount: ${error.message}`);
+    res.status(500).json({
+      success: false,
+      message: "Failed to retrieve member count",
+      timestamp: new Date().toISOString(),
+    });
+  } finally {
+    if (client) client.release();
+  }
+};

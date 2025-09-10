@@ -37,6 +37,9 @@ class CacheService {
   generateGroupInviteKey(inviteCode) {
     return `invite:${inviteCode}:group`;
   }
+  generateMembershipKey(userId, groupId) {
+    return `membership:${userId}:${groupId}`;
+  }
   async setUserProfile(userId, userData, ttl = this.defaultTTL) {
     try {
       const key = this.generateUserCacheKey(userId);
@@ -122,7 +125,7 @@ class CacheService {
 
       const serializedData = JSON.stringify({
         ...groupData,
-        cachedAt: new Date().toISOString,
+        cachedAt: new Date().toISOString(),
         expires_at: new Date(Date.now() + ttl * 1000).toISOString(),
       });
       await this.client.setEx(key, ttl, serializedData);
@@ -157,7 +160,7 @@ class CacheService {
       const serializedData = JSON.stringify({
         members: membersData,
         cachedAt: new Date().toISOString(),
-        expires_at: new Date(new Date() + ttl * 1000).toISOString(),
+        expires_at: new Date(Date.now() + ttl * 1000).toISOString(),
       });
       await this.client.setEx(key, ttl, serializedData);
       console.log(`Cached group members for groupId:${groupId}`);
@@ -217,6 +220,43 @@ class CacheService {
       return null;
     } catch (error) {
       console.log(`Error getting group invite cache:${error.message}`);
+      return null;
+    }
+  }
+
+  async setMembershipCache(userId, groupId, membershipData, ttl = 30 * 60) {
+    try {
+      const key = this.generateMembershipKey(userId, groupId);
+      const serializedData = JSON.stringify({
+        ...membershipData,
+        cachedAt: new Date().toISOString(),
+        expires_at: new Date(Date.now() + ttl * 1000).toISOString(),
+      });
+      await this.client.setEx(key, ttl, serializedData);
+      console.log(`Cached membership for userId:${userId} groupId:${groupId}`);
+      return true;
+    } catch (error) {
+      console.log(`Error setting membership cache:${error.message}`);
+      return false;
+    }
+  }
+  async getMembershipCache(userId, groupId) {
+    try {
+      const key = this.generateMembershipKey(userId, groupId);
+      const cachedData = await this.client.get(key);
+      if (cachedData) {
+        const parsedData = JSON.parse(cachedData);
+        console.log(
+          `Cache hit for membership userId:${userId} groupId:${groupId}`
+        );
+        return parsedData;
+      }
+      console.log(
+        `Cache miss for membership userId:${userId} groupId:${groupId}`
+      );
+      return null;
+    } catch (error) {
+      console.log(`Error getting membership cache:${error.message}`);
       return null;
     }
   }
@@ -336,14 +376,53 @@ class CacheService {
   }
 
   async invalidateMembershipCache(userId, groupId) {
-  try {
-    const cacheKey = `membership:${userId}:${groupId}`;
-    await cacheService.client.del(cacheKey);
-    console.log(`Invalidated membership cache for user:${userId} group:${groupId}`);
-  } catch (error) {
-    console.log(`Failed to invalidate membership cache: ${error.message}`);
+    try {
+      const cacheKey = this.generateMembershipKey(userId, groupId);
+      const result = await this.client.del(cacheKey);
+      console.log(
+        `Invalidated membership cache for user:${userId} group:${groupId}`
+      );
+      return result > 0;
+    } catch (error) {
+      console.log(`Failed to invalidate membership cache: ${error.message}`);
+    }
   }
-};
+  async invalidateAllUserMemberships(userId) {
+    try {
+      const pattern = `membership:${userId}`;
+      const keys = await this.client.keys(pattern);
+      if (keys.length > 0) {
+        await this.client.del(keys);
+        console.log(
+          `Invalidated ${keys.length} membership cache entries for userId:${userId}`
+        );
+      }
+      return keys.length;
+    } catch (error) {
+      console.log(`Error invalidating user memberships cache:${error.message}`);
+      return 0;
+    }
+  }
+  async invalidateCachesForNewMember(userId, groupId, existingMemberIds = []) {
+    try {
+      const promises = [];
+      promises.push(this.invalidateUserGroupCache(userId));
+      promises.push(this.invalidateGroupCache(groupId));
+
+      for (const memberId of existingMemberIds) {
+        promises.push(his.invalidateUserGroupCache(memberId));
+        promises.push(this.invalidateMembershipCache(memberId, groupId));
+      }
+      await Promise.all(promises);
+      console.log(
+        `Invalidated all relevant caches for new member userId:${userId} in groupId:${groupId}`
+      );
+      return true;
+    } catch (error) {
+      console.log(`Error invalidating caches for new member:${error.message}`);
+      return false;
+    }
+  }
 }
 
 export const cacheService = new CacheService();
