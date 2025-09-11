@@ -10,6 +10,7 @@ const AuthWrapper = ({ onAuthSuccess }) => {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
 
+  // Handle switching between login/register
   const handleSwitchToRegister = () => {
     setCurrentView("register");
     setSuccessMessage("");
@@ -20,37 +21,36 @@ const AuthWrapper = ({ onAuthSuccess }) => {
     setSuccessMessage("");
   };
 
+  // Handle successful login
   const handleLoginSuccess = (user) => {
-    console.log("User logged in:", user);
-    if (onAuthSuccess) {
-      onAuthSuccess(user);
-    }
-    navigate("/dashboard"); // 🚀 Redirect to dashboard after login
+    if (onAuthSuccess) onAuthSuccess(user);
+    navigate("/dashboard"); // 🚀 Redirect after login
   };
 
+  // Handle successful registration
   const handleRegistrationSuccess = (user, message) => {
-    console.log("User registered:", user);
     setSuccessMessage(
       message ||
         "Registration successful! Please check your email to verify your account."
     );
-    setCurrentView("login");
+    setCurrentView("login"); // Switch back to login after registration
   };
 
-  // If still loading
-  if (loading) {
-    return <div>Loading...</div>;
-  }
-
-  // If user already logged in, redirect immediately
+  // Redirect if already logged in
   useEffect(() => {
     if (user) {
       navigate("/dashboard");
     }
   }, [user, navigate]);
 
+  // Show loading while checking auth state
+  if (loading) {
+    return <div>Loading...</div>;
+  }
+
   return (
     <div style={{ maxWidth: "400px", margin: "50px auto", padding: "20px" }}>
+      {/* Registration success message */}
       {successMessage && (
         <div
           style={{
@@ -66,6 +66,7 @@ const AuthWrapper = ({ onAuthSuccess }) => {
         </div>
       )}
 
+      {/* Show login or register form */}
       {currentView === "login" ? (
         <Login
           onSwitchToRegister={handleSwitchToRegister}
