@@ -21,12 +21,12 @@ const router = express.Router();
 router.route("/create").post(authenticate, createGroup);
 
 //join group
-router.route("/join/:id").post(authenticate, joinGroup);
+router.route("/join").post(authenticate, joinGroup);
 
 //get user groups (requires membership)
 router
   .route("/get-user-groups")
-  .get(authenticate, groupMemberAuth, getUserGroups);
+  .get(authenticate,  getUserGroups);
 
 //get group details
 router.route("/:id").get(authenticate, groupMemberAuth, getGroupDetail);

@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import Login from "./Login";
 import Register from "./Register";
 import { useAuth } from "../context/AuthContext";
@@ -6,8 +7,8 @@ import { useAuth } from "../context/AuthContext";
 const AuthWrapper = ({ onAuthSuccess }) => {
   const [currentView, setCurrentView] = useState("login"); // 'login' or 'register'
   const [successMessage, setSuccessMessage] = useState("");
-
   const { user, loading } = useAuth();
+  const navigate = useNavigate();
 
   const handleSwitchToRegister = () => {
     setCurrentView("register");
@@ -24,6 +25,7 @@ const AuthWrapper = ({ onAuthSuccess }) => {
     if (onAuthSuccess) {
       onAuthSuccess(user);
     }
+    navigate("/dashboard"); // 🚀 Redirect to dashboard after login
   };
 
   const handleRegistrationSuccess = (user, message) => {
@@ -35,16 +37,17 @@ const AuthWrapper = ({ onAuthSuccess }) => {
     setCurrentView("login");
   };
 
-  // Show loading state
+  // If still loading
   if (loading) {
     return <div>Loading...</div>;
   }
 
-  // If user is already logged in, call success callback
-  if (user && onAuthSuccess) {
-    onAuthSuccess(user);
-    return null;
-  }
+  // If user already logged in, redirect immediately
+  useEffect(() => {
+    if (user) {
+      navigate("/dashboard");
+    }
+  }, [user, navigate]);
 
   return (
     <div style={{ maxWidth: "400px", margin: "50px auto", padding: "20px" }}>

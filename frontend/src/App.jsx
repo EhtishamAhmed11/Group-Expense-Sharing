@@ -1,31 +1,22 @@
 import React, { useState, useEffect } from "react";
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  Navigate,
+} from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import AuthWrapper from "./pages/AuthWrapper";
 import Dashboard from "./pages/Dashboard";
+import GroupManagement from "./pages/GroupManagement";
+import ExpenseManagement from "./pages/ExpenseManagement";
+import ProfileManagement from "./pages/ProfileManagement";
 
-// Main App Content Component
-const AppContent = () => {
-  const { user, loading, checkAuth } = useAuth();
-  const [appLoading, setAppLoading] = useState(true);
+// Protected Route wrapper
+const ProtectedRoute = ({ children }) => {
+  const { user, loading } = useAuth();
 
-  useEffect(() => {
-    // Check authentication status on app mount
-    const initializeApp = async () => {
-      await checkAuth();
-      setAppLoading(false);
-    };
-
-    initializeApp();
-  }, []);
-
-  // Handle successful authentication
-  const handleAuthSuccess = (userData) => {
-    console.log("Authentication successful:", userData);
-    // The user state is already updated by the AuthContext
-  };
-
-  // Show loading spinner while checking authentication
-  if (appLoading || loading) {
+  if (loading) {
     return (
       <div
         style={{
@@ -41,22 +32,96 @@ const AppContent = () => {
     );
   }
 
-  // Show authentication page if user is not logged in
   if (!user) {
-    return <AuthWrapper onAuthSuccess={handleAuthSuccess} />;
+    return <Navigate to="/auth" replace />;
   }
 
-  // Show dashboard if user is authenticated
-  return <Dashboard />;
+  return children;
+};
+
+// App Content with routes
+const AppContent = () => {
+  const { checkAuth } = useAuth();
+  const [appLoading, setAppLoading] = useState(true);
+
+  useEffect(() => {
+    const initializeApp = async () => {
+      await checkAuth();
+      setAppLoading(false);
+    };
+    initializeApp();
+  }, []);
+
+  if (appLoading) {
+    return (
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          height: "100vh",
+          fontSize: "18px",
+        }}
+      >
+        Loading...
+      </div>
+    );
+  }
+
+  return (
+    <Routes>
+      {/* Auth route */}
+      <Route path="/auth" element={<AuthWrapper />} />
+
+      {/* Protected routes */}
+      <Route
+        path="/dashboard"
+        element={
+          <ProtectedRoute>
+            <Dashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/groups"
+        element={
+          <ProtectedRoute>
+            <GroupManagement />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/expenses"
+        element={
+          <ProtectedRoute>
+            <ExpenseManagement />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/profile"
+        element={
+          <ProtectedRoute>
+            <ProfileManagement />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Default redirect */}
+      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+    </Routes>
+  );
 };
 
 // Main App Component
 const App = () => {
   return (
     <AuthProvider>
-      <div style={{ fontFamily: "Arial, sans-serif" }}>
-        <AppContent />
-      </div>
+      <Router>
+        <div style={{ fontFamily: "Arial, sans-serif" }}>
+          <AppContent />
+        </div>
+      </Router>
     </AuthProvider>
   );
 };

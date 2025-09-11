@@ -634,12 +634,14 @@ export const joinGroup = async (req, res) => {
   try {
     const { inviteCode } = req.body;
     const userId = req.userId;
+
     if (!inviteCode) {
       return res.status(400).json({
         success: false,
         message: "Invite code is required",
       });
     }
+
     if (!userId) {
       return res.status(401).json({
         success: false,
@@ -648,6 +650,7 @@ export const joinGroup = async (req, res) => {
     }
 
     client = await pool.connect();
+
     const findGroupQuery = `
       SELECT id, name, description, invite_code, member_count, is_active, created_at, updated_at
       FROM groups 
@@ -663,56 +666,76 @@ export const joinGroup = async (req, res) => {
     }
 
     const group = groupResult.rows[0];
-    const checkMembershipQuery = `
-      SELECT 
-        gm.role, gm.joined_at, gm.is_active
-      FROM group_members gm
-      WHERE gm.user_id = $1 
-      AND gm.group_id = $2
-      AND gm.is_active = true
+
+    await client.query("BEGIN");
+
+    const membershipCheckQuery = `
+      SELECT id, role, joined_at, is_active
+      FROM group_members
+      WHERE user_id = $1 AND group_id = $2
     `;
-    const membershipResult = await client.query(checkMembershipQuery, [
+    const membershipCheckResult = await client.query(membershipCheckQuery, [
       userId,
       group.id,
     ]);
 
-    if (membershipResult.rows.length > 0) {
-      return res.status(409).json({
-        success: false,
-        message: "You are already a member of this group",
-        data: {
-          group: {
-            id: group.id,
-            name: group.name,
-            description: group.description,
-            memberCount: group.member_count,
+    let membershipRow;
+
+    if (membershipCheckResult.rows.length > 0) {
+      if (membershipCheckResult.rows[0].is_active) {
+        await client.query("ROLLBACK");
+        return res.status(409).json({
+          success: false,
+          message: "You are already a member of this group",
+          data: {
+            group: {
+              id: group.id,
+              name: group.name,
+              description: group.description,
+              memberCount: group.member_count,
+            },
+            membership: membershipCheckResult.rows[0],
           },
-          membership: membershipResult.rows[0],
-        },
-      });
+        });
+      } else {
+        const reactivateQuery = `
+          UPDATE group_members
+SET is_active = true,
+    role = 'member',
+    joined_at = CURRENT_TIMESTAMP
+WHERE group_id = $1 AND user_id = $2
+RETURNING id, role, joined_at, is_active;
+
+        `;
+        const reactivateResult = await client.query(reactivateQuery, [
+          membershipCheckResult.rows[0].id,
+        ]);
+        membershipRow = reactivateResult.rows[0];
+      }
+    } else {
+      const insertQuery = `
+        INSERT INTO group_members (group_id, user_id, role, joined_at, is_active)
+        VALUES ($1, $2, 'member', CURRENT_TIMESTAMP, true)
+        RETURNING id, role, joined_at, is_active
+      `;
+      const insertResult = await client.query(insertQuery, [group.id, userId]);
+      membershipRow = insertResult.rows[0];
     }
-    await client.query("BEGIN");
-    const joinMemberQuery = `
-      INSERT INTO group_members(group_id,user_id,role,joined_at,is_active) VALUES ($1,$2,'member',CURRENT_TIMESTAMP,true)
-      RETURNING id,role,joined_at,is_active
-    `;
-    const insertResult = await client.query(joinMemberQuery, [
-      group.id,
-      userId,
-    ]);
 
     const updatedGroupQuery = `
-      SELECT id,name,description,member_count,created_at,updated_at FROM groups WHERE id=$1
+      SELECT id, name, description, member_count, created_at, updated_at
+      FROM groups 
+      WHERE id = $1
     `;
     const updatedGroupResult = await client.query(updatedGroupQuery, [
       group.id,
     ]);
 
     const existingMembersQuery = `
-      SELECT user_id FROM group_members
-      WHERE group_id =$1 AND user_id != $2 AND is_active = true
+      SELECT user_id 
+      FROM group_members
+      WHERE group_id = $1 AND user_id != $2 AND is_active = true
     `;
-
     const existingMembersResult = await client.query(existingMembersQuery, [
       group.id,
       userId,
@@ -720,6 +743,7 @@ export const joinGroup = async (req, res) => {
     const existingMemberIds = existingMembersResult.rows.map(
       (row) => row.user_id
     );
+
     await client.query("COMMIT");
 
     try {
@@ -728,15 +752,18 @@ export const joinGroup = async (req, res) => {
         group.id,
         existingMemberIds
       );
-      // await cacheService.invalidateGroupInviteCache(inviteCode);
     } catch (cacheError) {
       console.log(
-        `Don't fail the request if cache invalidation fails:${cacheError}`
+        `Don't fail the request if cache invalidation fails: ${cacheError}`
       );
     }
+
     res.status(200).json({
       success: true,
-      message: "Successfully joined the group",
+      message:
+        membershipCheckResult.rows.length > 0
+          ? "Successfully rejoined the group"
+          : "Successfully joined the group",
       data: {
         group: {
           id: updatedGroupResult.rows[0].id,
@@ -746,12 +773,7 @@ export const joinGroup = async (req, res) => {
           createdAt: updatedGroupResult.rows[0].created_at,
           updatedAt: updatedGroupResult.rows[0].updated_at,
         },
-        membership: {
-          id: insertResult.rows[0].id,
-          role: insertResult.rows[0].role,
-          joinedAt: insertResult.rows[0].joined_at,
-          isActive: insertResult.rows[0].is_active,
-        },
+        membership: membershipRow,
       },
     });
   } catch (error) {
@@ -1247,14 +1269,14 @@ export const leaveGroup = async (req, res) => {
     JOIN expenses e ON ep.expense_id=e.id
     WHERE e.group_id = $1
       AND (ep.user_id = $2 OR e.paid_by=$2)
-      AND ep.is_settled = false
+      AND ep.is_settle = false
       AND e.expense_type = 'group'    
     `;
     const unsettledResult = await client.query(unsettledExpensesQuery, [
       groupId,
       userId,
     ]);
-    const unsettledCount = parseInt(unsettledResult.rows[0].unsettled_count);
+    const unsettledCount = parseInt(unsettledResult.rows[0].unsettled_expenses);
 
     if (unsettledCount > 0) {
       await client.query("ROLLBACK");
@@ -1444,7 +1466,7 @@ export const transferGroupOwnership = async (req, res) => {
 
     const transferQuery = `
       UPDATE groups 
-      SET created_by = $1, updated_by = CURRENT_TIMESTAMP
+      SET created_by = $1, updated_at = CURRENT_TIMESTAMP
       WHERE id=$2
     `;
     await client.query(transferQuery, [newOwnerId, groupId]);
