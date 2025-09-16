@@ -4,17 +4,25 @@ import { cacheService } from "../utils/cache.js";
 const validateGroupMember = async (req, res, next) => {
   let client;
   try {
-    const groupId = req.params.id || req.body.group_id || req.body.groupId;
+    const groupId =
+      req.params.groupId ||
+      req.params.id ||
+      req.query.groupId ||
+      req.body?.group_id ||
+      req.body?.groupId;
     const userId = req.userId;
 
     if (!groupId) {
+      console.log(`error in middleware`)
       return res.status(400).json({
+
         success: false,
         message: "Group ID is required",
         timestamp: new Date().toISOString(),
       });
     }
-    const cacheKey = `membership"${userId}:${groupId}`;
+
+    const cacheKey = `membership:${userId}:${groupId}`;
     const cachedMembership = await cacheService.client.get(cacheKey);
     if (cachedMembership) {
       const membership = JSON.parse(cachedMembership);
@@ -22,6 +30,7 @@ const validateGroupMember = async (req, res, next) => {
       req.groupId = groupId;
       return next();
     }
+
     client = await pool.connect();
 
     const membershipQuery = `SELECT 
@@ -47,12 +56,14 @@ const validateGroupMember = async (req, res, next) => {
         timestamp: new Date().toISOString(),
       });
     }
+
+    const row = result.rows[0];
     const membership = {
-      role: result.rows[0].role,
-      joinedAt: result.rows[0].joined_at,
-      isActive: result.rows[0].membership_active,
-      groupName: result.rows[0].group_name,
-      isAdmin: result.rows[0].role === "admin",
+      role: row.role,
+      joinedAt: row.joined_at,
+      isActive: row.membership_active,
+      groupName: row.group_name,
+      isAdmin: row.role === "admin",
     };
 
     try {
@@ -62,14 +73,14 @@ const validateGroupMember = async (req, res, next) => {
         JSON.stringify(membership)
       );
     } catch (cacheError) {
-      console.log(`Failed to cacheMemberShip:${cacheError.message}`);
+      console.log(`Failed to cacheMemberShip: ${cacheError.message}`);
     }
+
     req.groupMembership = membership;
     req.groupId = groupId;
     next();
   } catch (error) {
     console.error("Group membership validation error:", error);
-
     res.status(500).json({
       success: false,
       message: "Membership validation failed",

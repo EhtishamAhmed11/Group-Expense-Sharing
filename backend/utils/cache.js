@@ -260,7 +260,40 @@ class CacheService {
       return null;
     }
   }
+  async setGroupExpenses(groupId, expensesData, ttl = this.defaultTTL) {
+    try {
+      const key = this.generateGroupExpensesKey(groupId);
+      const serializedData = JSON.stringify({
+        expenses: expensesData,
+        cachedAt: new Date().toISOString(),
+        expires_at: new Date(Date.now() + ttl * 1000).toISOString(),
+      });
+      await this.client.setEx(key, ttl, serializedData);
+      console.log(`Cached group expenses for groupId:${groupId}`);
+      return true;
+    } catch (error) {
+      console.log(`Error setting group expenses cache: ${error.message}`);
+      return false;
+    }
+  }
 
+  async getGroupExpenses(groupId) {
+    try {
+      const key = this.generateGroupExpensesKey(groupId);
+      const cachedData = await this.client.get(key);
+
+      if (cachedData) {
+        const parsedData = JSON.parse(cachedData);
+        console.log(`Cache hit for group expenses groupId:${groupId}`);
+        return parsedData.expenses;
+      }
+      console.log(`Cache miss for group expenses groupId:${groupId}`);
+      return null;
+    } catch (error) {
+      console.log(`Error getting group expenses cache: ${error.message}`);
+      return null;
+    }
+  }
   //----------
 
   async isAvailable() {

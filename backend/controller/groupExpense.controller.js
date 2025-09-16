@@ -495,3 +495,348 @@ export const createGroupExpense = async (req, res) => {
     }
   }
 };
+
+export const getGroupExpense = async (req, res) => {
+  let client;
+  try {
+    const groupId =
+      req.params.groupId ||
+      req.params.id ||
+      req.body.group_id ||
+      req.body.groupId;
+
+    const userId = req.userId;
+    if (!groupId) {
+      return res.status(400).json({
+        success: false,
+        message: "Group ID is required",
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    try {
+      const cachedData = await cacheService.getGroupDetails(groupId);
+      if (cachedData) {
+        return res.status(200).json({
+          success: true,
+          message: "Retrieved group expenses from cache",
+          data: cachedData,
+          fromCache: true,
+          timestamp: new Date().toISOString(),
+        });
+      }
+    } catch (cacheError) {
+      console.log(`Cache read error: ${cacheError.message}`);
+    }
+
+    client = await pool.connect();
+    const getGroupDetailsQuery = `
+      SELECT 
+        id,
+        name, 
+        description,
+        invite_code,
+        member_count,
+        created_by,
+        created_at 
+      FROM groups 
+      WHERE id = $1 AND is_active = true 
+    `;
+
+    const groupDetails = await client.query(getGroupDetailsQuery, [groupId]);
+
+    if (groupDetails.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Group not found or inactive",
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const group = groupDetails.rows[0];
+
+    const getExpensesDetailsQuery = `
+      SELECT 
+        e.id as expense_id,
+        e.amount,
+        e.description,
+        e.category_id,
+        e.expense_date,
+        e.created_by,
+        e.paid_by, 
+        e.split_type,
+        e.is_settled,
+        e.created_at,
+        e.updated_at,
+        e.notes,
+        ec.id as category_id,
+        ec.name as category_name,
+        ec.description as category_description,
+        ec.color as category_color,
+        ec.icon as category_icon,
+        u_payer.first_name as payer_first_name,
+        u_payer.last_name as payer_last_name,
+        u_payer.email as payer_email,
+        u_creator.first_name as creator_first_name,
+        u_creator.last_name as creator_last_name
+      FROM expenses e
+      LEFT JOIN expense_categories ec ON e.category_id = ec.id
+      LEFT JOIN users u_payer ON e.paid_by = u_payer.id
+      LEFT JOIN users u_creator ON e.created_by = u_creator.id
+      WHERE e.group_id = $1 AND e.expense_type = 'group'
+      ORDER BY e.expense_date DESC, e.created_at DESC;
+    `;
+
+    const expensesResult = await client.query(getExpensesDetailsQuery, [
+      groupId,
+    ]);
+
+    if (expensesResult.rows.length === 0) {
+      return res.status(200).json({
+        success: true,
+        message: "No expenses found for this group",
+        data: {
+          group: {
+            id: group.id,
+            name: group.name,
+            description: group.description,
+            memberCount: group.member_count,
+            inviteCode: group.invite_code,
+          },
+          expenses: [],
+          summary: {
+            totalExpenses: 0,
+            totalAmount: 0,
+            averageExpense: 0,
+            lastExpenseDate: null,
+          },
+        },
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const expenseIds = expensesResult.rows.map((row) => row.expense_id);
+
+    const getParticipantsQuery = `
+      SELECT 
+        ep.expense_id,
+        ep.user_id,
+        ep.amount_owed,
+        ep.percentage,
+        ep.is_settle as is_settled,
+        u.first_name,
+        u.last_name,
+        u.email,
+        u.profile_picture_url,
+        gm.role as group_role
+      FROM expense_participants ep
+      JOIN users u ON ep.user_id = u.id
+      LEFT JOIN group_members gm ON ep.user_id = gm.user_id AND gm.group_id = $1
+      WHERE ep.expense_id = ANY($2::uuid[])
+      ORDER BY ep.expense_id, ep.amount_owed DESC
+    `;
+    const participantsResult = await client.query(getParticipantsQuery, [
+      groupId,
+      expenseIds,
+    ]);
+
+    const participantsByExpense = new Map();
+    for (const p of participantsResult.rows) {
+      const id = p.expense_id;
+      if (!participantsByExpense.has(id)) {
+        participantsByExpense.set(id, []);
+      }
+      participantsByExpense.get(id).push({
+        userId: p.user_id,
+        name: `${p.first_name} ${p.last_name}`.trim(),
+        email: p.email,
+        profilePictureUrl: p.profile_picture_url,
+        groupRole: p.group_role,
+        amountOwed: parseFloat(p.amount_owed) || 0,
+        percentage: parseFloat(p.percentage) || 0,
+        isSettled: p.is_settled,
+      });
+    }
+
+    const expenses = expensesResult.rows.map((expense) => {
+      const participants = participantsByExpense.get(expense.expense_id) || [];
+
+      let totalOwedToOthers = 0;
+      let settledAmount = 0;
+
+      for (const person of participants) {
+        totalOwedToOthers += person.amountOwed;
+        if (person.isSettled) {
+          settledAmount += person.amountOwed;
+        }
+      }
+
+      const unsettledAmount = totalOwedToOthers - settledAmount;
+
+      let userAmountOwed = 0;
+      let userIsSettled = false;
+
+      for (const person of participants) {
+        if (person.userId === userId) {
+          userAmountOwed = person.amountOwed;
+          userIsSettled = person.isSettled;
+          break;
+        }
+      }
+
+      let userNetPosition;
+      if (expense.paid_by === userId) {
+        userNetPosition = parseFloat(expense.amount) - userAmountOwed;
+      } else {
+        userNetPosition = -userAmountOwed;
+      }
+
+      return {
+        id: expense.expense_id,
+        amount: parseFloat(expense.amount),
+        description: expense.description,
+        expenseDate: expense.expense_date,
+        splitType: expense.split_type,
+        isSettled: expense.is_settled,
+        createdAt: expense.created_at,
+        updatedAt: expense.updated_at,
+        notes: expense.notes,
+        category: expense.category_id
+          ? {
+              id: expense.category_id,
+              name: expense.category_name,
+              description: expense.category_description,
+              color: expense.category_color,
+              icon: expense.category_icon,
+            }
+          : null,
+        payer: {
+          userId: expense.paid_by,
+          name: `${expense.payer_first_name} ${expense.payer_last_name}`.trim(),
+          email: expense.payer_email,
+          isCurrentUser: expense.paid_by === userId,
+        },
+        creator:
+          expense.created_by !== expense.paid_by
+            ? {
+                userId: expense.created_by,
+                name: `${expense.creator_first_name} ${expense.creator_last_name}`.trim(),
+                isCurrentUser: expense.created_by === userId,
+              }
+            : null,
+        participants: participants,
+        financial: {
+          totalAmount: parseFloat(expense.amount),
+          totalOwed: totalOwedToOthers,
+          settledAmount: settledAmount,
+          unsettledAmount: unsettledAmount,
+          participantCount: participants.length,
+          averageShare:
+            participants.length > 0
+              ? totalOwedToOthers / participants.length
+              : 0,
+          settlementProgress:
+            totalOwedToOthers > 0
+              ? Math.round((settledAmount / totalOwedToOthers) * 100)
+              : 100,
+        },
+        userInfo: {
+          isUserPayer: expense.paid_by === userId,
+          isUserCreator: expense.created_by === userId,
+          userAmountOwed: userAmountOwed,
+          userIsSettled: userIsSettled,
+          userNetPosition: userNetPosition,
+        },
+      };
+    });
+
+    const totalAmount = expenses.reduce((sum, exp) => sum + exp.amount, 0);
+    const totalUnsettled = expenses.reduce(
+      (sum, exp) => sum + exp.financial.unsettledAmount,
+      0
+    );
+    const userTotalOwed = expenses.reduce(
+      (sum, exp) => sum + exp.userInfo.userAmountOwed,
+      0
+    );
+    const userTotalPaid = expenses
+      .filter((exp) => exp.userInfo.isUserPayer)
+      .reduce((sum, exp) => sum + exp.amount, 0);
+    const userNetBalance = userTotalPaid - userTotalOwed;
+
+    const responseData = {
+      group: {
+        id: group.id,
+        name: group.name,
+        description: group.description,
+        memberCount: group.member_count,
+        inviteCode: group.invite_code,
+        createdBy: group.created_by,
+        createdAt: group.created_at,
+      },
+      expenses: expenses,
+      summary: {
+        totalExpenses: expenses.length,
+        totalAmount: totalAmount,
+        totalUnsettled: totalUnsettled,
+        averageExpense:
+          expenses.length > 0
+            ? Math.round((totalAmount / expenses.length) * 100) / 100
+            : 0,
+        lastExpenseDate: expenses.length > 0 ? expenses[0].expenseDate : null,
+        oldestExpenseDate:
+          expenses.length > 0
+            ? expenses[expenses.length - 1].expenseDate
+            : null,
+        settledExpenses: expenses.filter((exp) => exp.isSettled).length,
+        pendingExpenses: expenses.filter((exp) => !exp.isSettled).length,
+      },
+      userSummary: {
+        totalOwed: userTotalOwed,
+        totalPaid: userTotalPaid,
+        netBalance: userNetBalance,
+        netPosition: userNetBalance >= 0 ? "creditor" : "debtor",
+        expensesCreated: expenses.filter((exp) => exp.userInfo.isUserCreator)
+          .length,
+        expensesPaid: expenses.filter((exp) => exp.userInfo.isUserPayer).length,
+      },
+    };
+
+    try {
+      await cacheService.setGroupDetails(groupId, responseData, 5 * 60);
+    } catch (cacheError) {
+      console.log(`Cache write error: ${cacheError.message}`);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Retrieved ${expenses.length} expenses for group`,
+      data: responseData,
+      fromCache: false,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error(`Error in getGroupExpense: ${error.message}`, {
+      groupId: req.params.group_id,
+      userId: req.userId,
+      stack: error.stack,
+    });
+
+    if (error.code === "22P02") {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid group ID format",
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to retrieve group expenses",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+      timestamp: new Date().toISOString(),
+    });
+  } finally {
+    if (client) client.release();
+  }
+};
