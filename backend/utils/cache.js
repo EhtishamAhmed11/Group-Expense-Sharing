@@ -410,7 +410,7 @@ class CacheService {
       promises.push(this.invalidateGroupCache(groupId));
 
       for (const memberId of existingMemberIds) {
-        promises.push(his.invalidateUserGroupCache(memberId));
+        promises.push(this.invalidateUserGroupCache(memberId));
         promises.push(this.invalidateMembershipCache(memberId, groupId));
       }
       await Promise.all(promises);

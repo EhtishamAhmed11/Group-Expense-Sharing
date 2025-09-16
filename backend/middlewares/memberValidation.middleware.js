@@ -4,7 +4,7 @@ import { cacheService } from "../utils/cache.js";
 const validateGroupMember = async (req, res, next) => {
   let client;
   try {
-    const groupId = req.params.id;
+    const groupId = req.params.id || req.body.group_id || req.body.groupId;
     const userId = req.userId;
 
     if (!groupId) {
