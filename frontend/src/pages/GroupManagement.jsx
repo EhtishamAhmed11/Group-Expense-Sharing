@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { useAuth } from "../context/AuthContext"; 
+import { useAuth } from "../context/AuthContext";
+import { Link } from "react-router-dom";
 
 const GroupManagement = () => {
   const { user } = useAuth();
@@ -23,7 +24,7 @@ const GroupManagement = () => {
       });
 
       const data = await response.json();
-
+      console.log(data);
       if (data.success) {
         setGroups(data.data.groups || []);
       } else {
@@ -319,18 +320,20 @@ const GroupManagement = () => {
                         gap: "8px",
                       }}
                     >
-                      <button
-                        onClick={() => handleViewGroup(group)}
+                      <Link
+                        to={`/groups/${group.id}/expenses`}
                         style={{
                           padding: "6px 12px",
                           backgroundColor: "#007bff",
                           color: "white",
                           border: "none",
-                          cursor: "pointer",
+                          textDecoration: "none",
+                          textAlign: "center",
+                          borderRadius: "4px",
                         }}
                       >
-                        View Details
-                      </button>
+                        View Expenses
+                      </Link>
                     </div>
                   </div>
                 </div>

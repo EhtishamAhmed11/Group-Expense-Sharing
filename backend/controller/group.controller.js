@@ -212,67 +212,89 @@ export const getUserGroups = async (req, res) => {
     client = await pool.connect();
 
     const getUserGroupsQuery = `
-      SELECT 
-        g.id,
-        g.name,
-        g.description,
-        g.invite_code,
-        g.member_count,
-        g.is_active as group_active,
-        g.created_at,
-        g.updated_at,
-        gm.role,
-        gm.joined_at,
-        gm.is_active as membership_active,
-        -- Creator info
-        creator.first_name as creator_first_name,
-        creator.last_name as creator_last_name,
-        creator.id as creator_id,
-        -- Recent activity stats
-        COALESCE(expense_stats.total_expenses, 0) as total_expenses,
-        COALESCE(expense_stats.total_amount, 0) as total_amount,
-        COALESCE(expense_stats.recent_expense_date, NULL) as recent_expense_date,
-        -- User's balance in this group
-        COALESCE(user_balance.balance, 0) as user_balance
-      FROM groups g
-      JOIN group_members gm ON g.id = gm.group_id
-      JOIN users creator ON g.created_by = creator.id
-      -- Get expense statistics for each group
-      LEFT JOIN (
-        SELECT 
-          group_id,
-          COUNT(*) as total_expenses,
-          SUM(amount) as total_amount,
-          MAX(expense_date) as recent_expense_date
-        FROM expenses 
-        WHERE group_id IS NOT NULL 
-          AND expense_type = 'group'
-          AND deleted_at IS NULL
-        GROUP BY group_id
-      ) expense_stats ON g.id = expense_stats.group_id
-      -- Get user's current balance in each group (simplified - you'll need actual balance logic)
-      LEFT JOIN (
-        SELECT 
-          ep.expense_id,
-          e.group_id,
-          SUM(ep.amount_owed) as balance
-        FROM expense_participants ep
-        JOIN expenses e ON ep.expense_id = e.id
-        WHERE ep.user_id = $1 
-          AND ep.is_settle = false
-          AND e.deleted_at IS NULL
-        GROUP BY e.group_id, ep.expense_id
-      ) user_balance ON g.id = user_balance.group_id
-      WHERE gm.user_id = $1 
-        AND gm.is_active = true 
-        AND g.is_active = true
-      ORDER BY 
-        CASE 
-          WHEN expense_stats.recent_expense_date IS NOT NULL 
-          THEN expense_stats.recent_expense_date 
-          ELSE gm.joined_at 
-        END DESC
-    `;
+  SELECT 
+    g.id,
+    g.name,
+    g.description,
+    g.invite_code,
+    g.member_count,
+    g.is_active as group_active,
+    g.created_at,
+    g.updated_at,
+    gm.role,
+    gm.joined_at,
+    gm.is_active as membership_active,
+    -- Creator info
+    creator.first_name as creator_first_name,
+    creator.last_name as creator_last_name,
+    creator.id as creator_id,
+    -- Recent activity stats (properly aggregated)
+    COALESCE(expense_stats.total_expenses, 0) as total_expenses,
+    COALESCE(expense_stats.total_amount, 0) as total_amount,
+    COALESCE(expense_stats.recent_expense_date, NULL) as recent_expense_date,
+    -- User's balance in this group (properly aggregated)
+    COALESCE(user_balance.user_debt, 0) as user_debt,
+    COALESCE(user_balance.user_credit, 0) as user_credit,
+    COALESCE(user_balance.net_balance, 0) as net_balance
+  FROM groups g
+  JOIN group_members gm ON g.id = gm.group_id
+  JOIN users creator ON g.created_by = creator.id
+  -- Get expense statistics for each group (SINGLE ROW PER GROUP)
+  LEFT JOIN (
+    SELECT 
+      group_id,
+      COUNT(*) as total_expenses,
+      SUM(amount) as total_amount,
+      MAX(expense_date) as recent_expense_date
+    FROM expenses 
+    WHERE group_id IS NOT NULL 
+      AND expense_type = 'group'
+      AND is_settled = false  -- Use is_settled instead of deleted_at
+    GROUP BY group_id
+  ) expense_stats ON g.id = expense_stats.group_id
+  -- Get user's COMPLETE balance in each group (SINGLE ROW PER GROUP)
+  LEFT JOIN (
+    SELECT 
+      e.group_id,
+      -- Amount user owes (their debts)
+      COALESCE(SUM(CASE 
+        WHEN ep.user_id = $1 AND ep.is_settle = false 
+        THEN ep.amount_owed 
+        ELSE 0 
+      END), 0) as user_debt,
+      -- Amount owed to user (their credits from expenses they paid)
+      COALESCE(SUM(CASE 
+        WHEN e.paid_by = $1 AND ep.user_id != $1 AND ep.is_settle = false
+        THEN ep.amount_owed 
+        ELSE 0 
+      END), 0) as user_credit,
+      -- Net balance (positive = user is owed money, negative = user owes money)
+      COALESCE(SUM(CASE 
+        WHEN e.paid_by = $1 AND ep.user_id != $1 AND ep.is_settle = false
+        THEN ep.amount_owed 
+        ELSE 0 
+      END), 0) - COALESCE(SUM(CASE 
+        WHEN ep.user_id = $1 AND ep.is_settle = false 
+        THEN ep.amount_owed 
+        ELSE 0 
+      END), 0) as net_balance
+    FROM expenses e
+    JOIN expense_participants ep ON e.id = ep.expense_id
+    WHERE e.group_id IS NOT NULL 
+      AND e.expense_type = 'group'
+      AND (ep.user_id = $1 OR e.paid_by = $1)  -- Only expenses involving this user
+    GROUP BY e.group_id
+  ) user_balance ON g.id = user_balance.group_id
+  WHERE gm.user_id = $1 
+    AND gm.is_active = true 
+    AND g.is_active = true
+  ORDER BY 
+    CASE 
+      WHEN expense_stats.recent_expense_date IS NOT NULL 
+      THEN expense_stats.recent_expense_date 
+      ELSE gm.joined_at 
+    END DESC
+`;
 
     const result = await client.query(getUserGroupsQuery, [userId]);
 

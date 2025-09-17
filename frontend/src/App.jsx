@@ -11,6 +11,8 @@ import Dashboard from "./pages/Dashboard";
 import GroupManagement from "./pages/GroupManagement";
 import ExpenseManagement from "./pages/ExpenseManagement";
 import ProfileManagement from "./pages/ProfileManagement";
+import GroupExpenses from "./pages/GroupExpenses"; 
+import CreateExpense from "./pages/createExpense";
 
 // Protected Route wrapper
 const ProtectedRoute = ({ children }) => {
@@ -103,6 +105,23 @@ const AppContent = () => {
         element={
           <ProtectedRoute>
             <ProfileManagement />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/groups/:groupId/expenses"
+        element={
+          <ProtectedRoute>
+            <GroupExpenses />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/groups/:groupId/expenses/create"
+        element={
+          <ProtectedRoute>
+            <CreateExpense />
           </ProtectedRoute>
         }
       />

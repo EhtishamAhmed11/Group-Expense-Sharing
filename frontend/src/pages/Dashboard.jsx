@@ -3,6 +3,8 @@ import { useAuth } from "../context/AuthContext";
 import ExpenseManagement from "./ExpenseManagement";
 import ProfileManagement from "./ProfileManagement";
 import GroupManagement from "./GroupManagement";
+import GroupExpenses from "./GroupExpenses";
+import CreateExpense from "./CreateExpense";
 
 const Dashboard = () => {
   const [currentView, setCurrentView] = useState("overview");
@@ -23,6 +25,7 @@ const Dashboard = () => {
     totalBalance: 0,
     groupBalances: [],
     recentGroupExpenses: [],
+    groups: [],
   });
 
   const [dashboardLoading, setDashboardLoading] = useState(true);
@@ -152,6 +155,7 @@ const Dashboard = () => {
           .slice(0, 5);
 
         const groupBalances = groups.map((g) => ({
+          id: g.id,
           name: g.name,
           balance: g.userBalance || 0,
         }));
@@ -162,6 +166,7 @@ const Dashboard = () => {
           totalBalance,
           groupBalances,
           recentGroupExpenses,
+          groups,
         });
       }
     } catch (error) {
@@ -192,7 +197,14 @@ const Dashboard = () => {
         }}
       >
         <div>
-          {["overview", "expenses", "groups", "profile"].map((view) => (
+          {[
+            "overview",
+            "expenses",
+            "groups",
+            "profile",
+            "groupExpenses",
+            "createExpense",
+          ].map((view) => (
             <button
               key={view}
               onClick={() => setCurrentView(view)}
@@ -205,7 +217,11 @@ const Dashboard = () => {
                 cursor: "pointer",
               }}
             >
-              {view.charAt(0).toUpperCase() + view.slice(1)}
+              {view === "groupExpenses"
+                ? "View Group Expenses"
+                : view === "createExpense"
+                ? "Create Group Expense"
+                : view.charAt(0).toUpperCase() + view.slice(1)}
             </button>
           ))}
         </div>
