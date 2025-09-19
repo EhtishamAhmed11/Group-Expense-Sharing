@@ -496,6 +496,7 @@ export const createGroupExpense = async (req, res) => {
   }
 };
 
+
 export const getGroupExpense = async (req, res) => {
   let client;
   try {
@@ -506,6 +507,7 @@ export const getGroupExpense = async (req, res) => {
       req.body.groupId;
 
     const userId = req.userId;
+
     if (!groupId) {
       return res.status(400).json({
         success: false,
@@ -514,322 +516,206 @@ export const getGroupExpense = async (req, res) => {
       });
     }
 
+    let {
+      page = 1,
+      limit = 10,
+      search = "",
+      sortBy = "expense_date",
+      sortOrder = "DESC",
+      category = "",
+      paidBy = "",
+      dateFrom = "",
+      dateTo = "",
+      minAmount = "",
+      maxAmount = "",
+      settlementStatus = "",
+      userRole = "",
+    } = req.query;
+
+    page = parseInt(page) || 1;
+    limit = parseInt(limit) || 10;
+    if (page < 1) page = 1;
+    if (limit < 1) limit = 10;
+    if (limit > 50) limit = 50;
+    const offset = (page - 1) * limit;
+
+    const allowedSortFields = [
+      "expense_date",
+      "amount",
+      "description",
+      "created_at",
+      "updated_at",
+    ];
+    if (!allowedSortFields.includes(sortBy)) {
+      sortBy = "expense_date";
+    }
+    sortOrder = sortOrder.toUpperCase() === "ASC" ? "ASC" : "DESC";
+
+    const cacheKey = `group_expenses:${groupId}:${page}:${limit}:${search}:${sortBy}:${sortOrder}:${category}:${paidBy}:${dateFrom}:${dateTo}:${minAmount}:${maxAmount}:${settlementStatus}:${userRole}`;
     try {
-      const cachedData = await cacheService.getGroupDetails(groupId);
+      const cachedData = await cacheService.client.get(cacheKey);
       if (cachedData) {
         return res.status(200).json({
           success: true,
           message: "Retrieved group expenses from cache",
-          data: cachedData,
+          data: JSON.parse(cachedData),
           fromCache: true,
           timestamp: new Date().toISOString(),
         });
       }
-    } catch (cacheError) {
-      console.log(`Cache read error: ${cacheError.message}`);
+    } catch (err) {
+      console.log("Cache read error:", err.message);
     }
 
     client = await pool.connect();
-    const getGroupDetailsQuery = `
-      SELECT 
-        id,
-        name, 
-        description,
-        invite_code,
-        member_count,
-        created_by,
-        created_at 
-      FROM groups 
-      WHERE id = $1 AND is_active = true 
-    `;
 
-    const groupDetails = await client.query(getGroupDetailsQuery, [groupId]);
-
-    if (groupDetails.rows.length === 0) {
+    const groupQuery = `SELECT id, name, description, invite_code, member_count, created_by, created_at
+                        FROM groups WHERE id = $1 AND is_active = true`;
+    const groupResult = await client.query(groupQuery, [groupId]);
+    if (groupResult.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: "Group not found or inactive",
         timestamp: new Date().toISOString(),
       });
     }
+    const group = groupResult.rows[0];
 
-    const group = groupDetails.rows[0];
+    let whereClause = `WHERE e.group_id = $1 AND e.expense_type = 'group'`;
+    let queryParams = [groupId];
+    let paramIndex = 2;
 
-    const getExpensesDetailsQuery = `
+    if (search.trim()) {
+      whereClause += ` AND (LOWER(e.description) LIKE LOWER($${paramIndex}) OR LOWER(COALESCE(e.notes, '')) LIKE LOWER($${paramIndex}))`;
+      queryParams.push(`%${search.trim()}%`);
+      paramIndex++;
+    }
+
+    if (category.trim()) {
+      whereClause += ` AND ec.name ILIKE $${paramIndex}`;
+      queryParams.push(`%${category.trim()}%`);
+      paramIndex++;
+    }
+
+    if (paidBy.trim()) {
+      whereClause += ` AND (
+        LOWER(u_payer.first_name) LIKE LOWER($${paramIndex}) OR 
+        LOWER(u_payer.last_name) LIKE LOWER($${paramIndex}) OR
+        LOWER(CONCAT(u_payer.first_name, ' ', u_payer.last_name)) LIKE LOWER($${paramIndex})
+      )`;
+      queryParams.push(`%${paidBy.trim()}%`);
+      paramIndex++;
+    }
+
+    if (dateFrom.trim()) {
+      whereClause += ` AND e.expense_date >= $${paramIndex}`;
+      queryParams.push(dateFrom.trim());
+      paramIndex++;
+    }
+    if (dateTo.trim()) {
+      whereClause += ` AND e.expense_date <= $${paramIndex}`;
+      queryParams.push(dateTo.trim());
+      paramIndex++;
+    }
+
+    if (minAmount && !isNaN(parseFloat(minAmount))) {
+      whereClause += ` AND e.amount >= $${paramIndex}`;
+      queryParams.push(parseFloat(minAmount));
+      paramIndex++;
+    }
+    if (maxAmount && !isNaN(parseFloat(maxAmount))) {
+      whereClause += ` AND e.amount <= $${paramIndex}`;
+      queryParams.push(parseFloat(maxAmount));
+      paramIndex++;
+    }
+
+    if (settlementStatus === "settled") {
+      whereClause += ` AND e.is_settled = true`;
+    } else if (settlementStatus === "pending") {
+      whereClause += ` AND e.is_settled = false`;
+    }
+    const expensesQuery = `
       SELECT 
-        e.id as expense_id,
-        e.amount,
-        e.description,
-        e.category_id,
-        e.expense_date,
-        e.created_by,
-        e.paid_by, 
-        e.split_type,
-        e.is_settled,
-        e.created_at,
-        e.updated_at,
-        e.notes,
-        ec.id as category_id,
-        ec.name as category_name,
-        ec.description as category_description,
-        ec.color as category_color,
-        ec.icon as category_icon,
-        u_payer.first_name as payer_first_name,
-        u_payer.last_name as payer_last_name,
-        u_payer.email as payer_email,
-        u_creator.first_name as creator_first_name,
-        u_creator.last_name as creator_last_name
+        e.id as expense_id, e.amount, e.description, e.category_id,
+        e.expense_date, e.created_by, e.paid_by, e.split_type,
+        e.is_settled, e.created_at, e.updated_at, e.notes,
+        ec.id as category_id, ec.name as category_name, ec.description as category_description,
+        ec.color as category_color, ec.icon as category_icon,
+        u_payer.first_name as payer_first_name, u_payer.last_name as payer_last_name, u_payer.email as payer_email,
+        u_creator.first_name as creator_first_name, u_creator.last_name as creator_last_name
       FROM expenses e
       LEFT JOIN expense_categories ec ON e.category_id = ec.id
       LEFT JOIN users u_payer ON e.paid_by = u_payer.id
       LEFT JOIN users u_creator ON e.created_by = u_creator.id
-      WHERE e.group_id = $1 AND e.expense_type = 'group'
-      ORDER BY e.expense_date DESC, e.created_at DESC;
+      ${whereClause}
+      ORDER BY e.${sortBy} ${sortOrder}
+      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+    `;
+    queryParams.push(limit, offset);
+    console.log(`WHERE CLAUSE:${whereClause}`);
+    const countQuery = `
+      SELECT COUNT(*) as total_count
+      FROM expenses e
+      LEFT JOIN expense_categories ec ON e.category_id = ec.id
+      LEFT JOIN users u_payer ON e.paid_by = u_payer.id
+      ${whereClause}
     `;
 
-    const expensesResult = await client.query(getExpensesDetailsQuery, [
-      groupId,
+    const [expensesResult, countResult] = await Promise.all([
+      client.query(expensesQuery, queryParams),
+      client.query(countQuery, queryParams.slice(0, paramIndex - 1)),
     ]);
 
-    if (expensesResult.rows.length === 0) {
-      return res.status(200).json({
-        success: true,
-        message: "No expenses found for this group",
-        data: {
-          group: {
-            id: group.id,
-            name: group.name,
-            description: group.description,
-            memberCount: group.member_count,
-            inviteCode: group.invite_code,
-          },
-          expenses: [],
-          summary: {
-            totalExpenses: 0,
-            totalAmount: 0,
-            averageExpense: 0,
-            lastExpenseDate: null,
-          },
-        },
-        timestamp: new Date().toISOString(),
-      });
-    }
-
-    const expenseIds = expensesResult.rows.map((row) => row.expense_id);
-
-    const getParticipantsQuery = `
-      SELECT 
-        ep.expense_id,
-        ep.user_id,
-        ep.amount_owed,
-        ep.percentage,
-        ep.is_settle as is_settled,
-        u.first_name,
-        u.last_name,
-        u.email,
-        u.profile_picture_url,
-        gm.role as group_role
-      FROM expense_participants ep
-      JOIN users u ON ep.user_id = u.id
-      LEFT JOIN group_members gm ON ep.user_id = gm.user_id AND gm.group_id = $1
-      WHERE ep.expense_id = ANY($2::uuid[])
-      ORDER BY ep.expense_id, ep.amount_owed DESC
-    `;
-    const participantsResult = await client.query(getParticipantsQuery, [
-      groupId,
-      expenseIds,
-    ]);
-
-    const participantsByExpense = new Map();
-    for (const p of participantsResult.rows) {
-      const id = p.expense_id;
-      if (!participantsByExpense.has(id)) {
-        participantsByExpense.set(id, []);
-      }
-      participantsByExpense.get(id).push({
-        userId: p.user_id,
-        name: `${p.first_name} ${p.last_name}`.trim(),
-        email: p.email,
-        profilePictureUrl: p.profile_picture_url,
-        groupRole: p.group_role,
-        amountOwed: parseFloat(p.amount_owed) || 0,
-        percentage: parseFloat(p.percentage) || 0,
-        isSettled: p.is_settled,
-      });
-    }
-
-    const expenses = expensesResult.rows.map((expense) => {
-      const participants = participantsByExpense.get(expense.expense_id) || [];
-
-      let totalOwedToOthers = 0;
-      let settledAmount = 0;
-
-      for (const person of participants) {
-        totalOwedToOthers += person.amountOwed;
-        if (person.isSettled) {
-          settledAmount += person.amountOwed;
-        }
-      }
-
-      const unsettledAmount = totalOwedToOthers - settledAmount;
-
-      let userAmountOwed = 0;
-      let userIsSettled = false;
-
-      for (const person of participants) {
-        if (person.userId === userId) {
-          userAmountOwed = person.amountOwed;
-          userIsSettled = person.isSettled;
-          break;
-        }
-      }
-
-      let userNetPosition;
-      if (expense.paid_by === userId) {
-        userNetPosition = parseFloat(expense.amount) - userAmountOwed;
-      } else {
-        userNetPosition = -userAmountOwed;
-      }
-
-      return {
-        id: expense.expense_id,
-        amount: parseFloat(expense.amount),
-        description: expense.description,
-        expenseDate: expense.expense_date,
-        splitType: expense.split_type,
-        isSettled: expense.is_settled,
-        createdAt: expense.created_at,
-        updatedAt: expense.updated_at,
-        notes: expense.notes,
-        category: expense.category_id
-          ? {
-              id: expense.category_id,
-              name: expense.category_name,
-              description: expense.category_description,
-              color: expense.category_color,
-              icon: expense.category_icon,
-            }
-          : null,
-        payer: {
-          userId: expense.paid_by,
-          name: `${expense.payer_first_name} ${expense.payer_last_name}`.trim(),
-          email: expense.payer_email,
-          isCurrentUser: expense.paid_by === userId,
-        },
-        creator:
-          expense.created_by !== expense.paid_by
-            ? {
-                userId: expense.created_by,
-                name: `${expense.creator_first_name} ${expense.creator_last_name}`.trim(),
-                isCurrentUser: expense.created_by === userId,
-              }
-            : null,
-        participants: participants,
-        financial: {
-          totalAmount: parseFloat(expense.amount),
-          totalOwed: totalOwedToOthers,
-          settledAmount: settledAmount,
-          unsettledAmount: unsettledAmount,
-          participantCount: participants.length,
-          averageShare:
-            participants.length > 0
-              ? totalOwedToOthers / participants.length
-              : 0,
-          settlementProgress:
-            totalOwedToOthers > 0
-              ? Math.round((settledAmount / totalOwedToOthers) * 100)
-              : 100,
-        },
-        userInfo: {
-          isUserPayer: expense.paid_by === userId,
-          isUserCreator: expense.created_by === userId,
-          userAmountOwed: userAmountOwed,
-          userIsSettled: userIsSettled,
-          userNetPosition: userNetPosition,
-        },
-      };
-    });
-
-    const totalAmount = expenses.reduce((sum, exp) => sum + exp.amount, 0);
-    const totalUnsettled = expenses.reduce(
-      (sum, exp) => sum + exp.financial.unsettledAmount,
-      0
-    );
-    const userTotalOwed = expenses.reduce(
-      (sum, exp) => sum + exp.userInfo.userAmountOwed,
-      0
-    );
-    const userTotalPaid = expenses
-      .filter((exp) => exp.userInfo.isUserPayer)
-      .reduce((sum, exp) => sum + exp.amount, 0);
-    const userNetBalance = userTotalPaid - userTotalOwed;
+    const totalExpenses = parseInt(countResult.rows[0].total_count);
+    const totalPages = Math.ceil(totalExpenses / limit);
 
     const responseData = {
-      group: {
-        id: group.id,
-        name: group.name,
-        description: group.description,
-        memberCount: group.member_count,
-        inviteCode: group.invite_code,
-        createdBy: group.created_by,
-        createdAt: group.created_at,
+      group,
+      expenses: expensesResult.rows,
+      pagination: {
+        currentPage: page,
+        totalPages,
+        totalExpenses,
+        limit,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1,
       },
-      expenses: expenses,
-      summary: {
-        totalExpenses: expenses.length,
-        totalAmount: totalAmount,
-        totalUnsettled: totalUnsettled,
-        averageExpense:
-          expenses.length > 0
-            ? Math.round((totalAmount / expenses.length) * 100) / 100
-            : 0,
-        lastExpenseDate: expenses.length > 0 ? expenses[0].expenseDate : null,
-        oldestExpenseDate:
-          expenses.length > 0
-            ? expenses[expenses.length - 1].expenseDate
-            : null,
-        settledExpenses: expenses.filter((exp) => exp.isSettled).length,
-        pendingExpenses: expenses.filter((exp) => !exp.isSettled).length,
-      },
-      userSummary: {
-        totalOwed: userTotalOwed,
-        totalPaid: userTotalPaid,
-        netBalance: userNetBalance,
-        netPosition: userNetBalance >= 0 ? "creditor" : "debtor",
-        expensesCreated: expenses.filter((exp) => exp.userInfo.isUserCreator)
-          .length,
-        expensesPaid: expenses.filter((exp) => exp.userInfo.isUserPayer).length,
+      filters: {
+        search,
+        category,
+        paidBy,
+        dateFrom,
+        dateTo,
+        minAmount,
+        maxAmount,
+        settlementStatus,
+        userRole,
+        sortBy,
+        sortOrder,
       },
     };
 
     try {
-      await cacheService.setGroupDetails(groupId, responseData, 5 * 60);
-    } catch (cacheError) {
-      console.log(`Cache write error: ${cacheError.message}`);
+      const cacheTime =
+        search || category || paidBy || dateFrom || dateTo ? 120 : 300;
+      await cacheService.client.setEx(
+        cacheKey,
+        cacheTime,
+        JSON.stringify(responseData)
+      );
+    } catch (err) {
+      console.log("Cache write error:", err.message);
     }
 
     res.status(200).json({
       success: true,
-      message: `Retrieved ${expenses.length} expenses for group`,
+      message: `Retrieved expenses (page ${page} of ${totalPages})`,
       data: responseData,
       fromCache: false,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error(`Error in getGroupExpense: ${error.message}`, {
-      groupId: req.params.group_id,
-      userId: req.userId,
-      stack: error.stack,
-    });
-
-    if (error.code === "22P02") {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid group ID format",
-        timestamp: new Date().toISOString(),
-      });
-    }
-
+    console.error("Error in getGroupExpense:", error.message);
     res.status(500).json({
       success: false,
       message: "Failed to retrieve group expenses",
