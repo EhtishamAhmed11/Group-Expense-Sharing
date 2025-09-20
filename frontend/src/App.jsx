@@ -4,6 +4,7 @@ import {
   Routes,
   Route,
   Navigate,
+  useLocation,
 } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import AuthWrapper from "./pages/AuthWrapper";
@@ -11,8 +12,11 @@ import Dashboard from "./pages/Dashboard";
 import GroupManagement from "./pages/GroupManagement";
 import ExpenseManagement from "./pages/ExpenseManagement";
 import ProfileManagement from "./pages/ProfileManagement";
-import GroupExpenses from "./pages/GroupExpenses"; 
+import GroupExpenses from "./pages/GroupExpenses";
 import CreateExpense from "./pages/createExpense";
+import DebtSummary from "./pages/DebtSummary";
+import DetailedDebts from "./pages/DetailedDebts";
+import Navbar from "./components/Navbar"; // ✅ import your Navbar
 
 // Protected Route wrapper
 const ProtectedRoute = ({ children }) => {
@@ -45,6 +49,7 @@ const ProtectedRoute = ({ children }) => {
 const AppContent = () => {
   const { checkAuth } = useAuth();
   const [appLoading, setAppLoading] = useState(true);
+  const location = useLocation();
 
   useEffect(() => {
     const initializeApp = async () => {
@@ -71,64 +76,85 @@ const AppContent = () => {
   }
 
   return (
-    <Routes>
-      {/* Auth route */}
-      <Route path="/auth" element={<AuthWrapper />} />
+    <>
+      {/* ✅ Show Navbar on all pages except /auth */}
+      {location.pathname !== "/auth" && <Navbar />}
 
-      {/* Protected routes */}
-      <Route
-        path="/dashboard"
-        element={
-          <ProtectedRoute>
-            <Dashboard />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/groups"
-        element={
-          <ProtectedRoute>
-            <GroupManagement />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/expenses"
-        element={
-          <ProtectedRoute>
-            <ExpenseManagement />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/profile"
-        element={
-          <ProtectedRoute>
-            <ProfileManagement />
-          </ProtectedRoute>
-        }
-      />
+      <Routes>
+        {/* Auth route */}
+        <Route path="/auth" element={<AuthWrapper />} />
 
-      <Route
-        path="/groups/:groupId/expenses"
-        element={
-          <ProtectedRoute>
-            <GroupExpenses />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/groups/:groupId/expenses/create"
-        element={
-          <ProtectedRoute>
-            <CreateExpense />
-          </ProtectedRoute>
-        }
-      />
+        {/* Protected routes */}
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/groups"
+          element={
+            <ProtectedRoute>
+              <GroupManagement />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/expenses"
+          element={
+            <ProtectedRoute>
+              <ExpenseManagement />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/profile"
+          element={
+            <ProtectedRoute>
+              <ProfileManagement />
+            </ProtectedRoute>
+          }
+        />
 
-      {/* Default redirect */}
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
-    </Routes>
+        <Route
+          path="/groups/:groupId/expenses"
+          element={
+            <ProtectedRoute>
+              <GroupExpenses />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/groups/:groupId/expenses/create"
+          element={
+            <ProtectedRoute>
+              <CreateExpense />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/debt"
+          element={
+            <ProtectedRoute>
+              <DebtSummary />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/debt/:groupId/detailed"
+          element={
+            <ProtectedRoute>
+              <DetailedDebts />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Default redirect */}
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      </Routes>
+    </>
   );
 };
 

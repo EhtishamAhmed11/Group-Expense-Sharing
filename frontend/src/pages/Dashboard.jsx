@@ -1,14 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
-import ExpenseManagement from "./ExpenseManagement";
-import ProfileManagement from "./ProfileManagement";
-import GroupManagement from "./GroupManagement";
-import GroupExpenses from "./GroupExpenses";
-import CreateExpense from "./CreateExpense";
+import { useLocation } from "react-router-dom";
 
 const Dashboard = () => {
-  const [currentView, setCurrentView] = useState("overview");
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
+  const location = useLocation();
 
   const [dashboardData, setDashboardData] = useState({
     totalExpenses: 0,
@@ -29,19 +25,13 @@ const Dashboard = () => {
   });
 
   const [dashboardLoading, setDashboardLoading] = useState(true);
-
   const API_BASE_URL = "http://localhost:3005/api";
 
-  const handleLogout = async () => {
-    await logout();
-  };
-
-  // Fetch dashboard + group data
+  // ---------------- Fetch Dashboard Data ----------------
   const fetchDashboardData = async () => {
     try {
       setDashboardLoading(true);
 
-      // ---------- Personal Expense Data ----------
       const now = new Date();
       const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
       const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
@@ -94,7 +84,7 @@ const Dashboard = () => {
         groupsResponse.json(),
       ]);
 
-      // ---------- Calculate Personal ----------
+      // ---------- Personal ----------
       const monthlyExpenses = expensesData.success
         ? expensesData.data.expenses
         : [];
@@ -137,7 +127,7 @@ const Dashboard = () => {
         upcomingRecurring,
       });
 
-      // ---------- Calculate Group ----------
+      // ---------- Groups ----------
       if (groupsData.success) {
         const groups = groupsData.data.groups || [];
         const totalGroups = groups.length;
@@ -177,76 +167,12 @@ const Dashboard = () => {
   };
 
   useEffect(() => {
-    if (user && currentView === "overview") fetchDashboardData();
-  }, [user, currentView]);
+    if (user && location.pathname === "/dashboard") {
+      fetchDashboardData();
+    }
+  }, [user, location.pathname]);
 
-  // Navigation bar
-  const renderNavigation = () => (
-    <nav
-      style={{
-        padding: "20px",
-        borderBottom: "1px solid #ddd",
-        marginBottom: "20px",
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-        }}
-      >
-        <div>
-          {[
-            "overview",
-            "expenses",
-            "groups",
-            "profile",
-            "groupExpenses",
-            "createExpense",
-          ].map((view) => (
-            <button
-              key={view}
-              onClick={() => setCurrentView(view)}
-              style={{
-                marginRight: "10px",
-                padding: "8px 16px",
-                backgroundColor: currentView === view ? "#007bff" : "#f8f9fa",
-                color: currentView === view ? "white" : "black",
-                border: "1px solid #ddd",
-                cursor: "pointer",
-              }}
-            >
-              {view === "groupExpenses"
-                ? "View Group Expenses"
-                : view === "createExpense"
-                ? "Create Group Expense"
-                : view.charAt(0).toUpperCase() + view.slice(1)}
-            </button>
-          ))}
-        </div>
-        <div style={{ display: "flex", alignItems: "center" }}>
-          <span style={{ marginRight: "15px" }}>
-            Welcome, {user?.firstName} {user?.lastName}
-          </span>
-          <button
-            onClick={handleLogout}
-            style={{
-              padding: "8px 16px",
-              backgroundColor: "#dc3545",
-              color: "white",
-              border: "none",
-              cursor: "pointer",
-            }}
-          >
-            Logout
-          </button>
-        </div>
-      </div>
-    </nav>
-  );
-
-  // ---------------- Dashboard UI ----------------
+  // ---------------- Overview UI ----------------
   const renderOverview = () => (
     <div style={{ padding: "20px" }}>
       <h2>Dashboard Overview</h2>
@@ -330,27 +256,7 @@ const Dashboard = () => {
     </div>
   );
 
-  const renderContent = () => {
-    switch (currentView) {
-      case "overview":
-        return renderOverview();
-      case "expenses":
-        return <ExpenseManagement />;
-      case "profile":
-        return <ProfileManagement />;
-      case "groups":
-        return <GroupManagement />;
-      default:
-        return renderOverview();
-    }
-  };
-
-  return (
-    <div>
-      {renderNavigation()}
-      {renderContent()}
-    </div>
-  );
+  return <div>{location.pathname === "/dashboard" && renderOverview()}</div>;
 };
 
 // Reusable summary card
