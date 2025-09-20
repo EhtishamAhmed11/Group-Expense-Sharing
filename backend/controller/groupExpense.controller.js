@@ -72,6 +72,15 @@ export const createGroupExpense = async (req, res) => {
     const members = memberResult.rows;
     const memberCount = members.length;
     console.log(`Found ${memberCount} active members in group ${group_id}`);
+    const memberIds = members.map((member) => member.user_id);
+    try {
+      await cacheService.invalidateDebtCaches(memberIds);
+      console.log(
+        `Invalidated debt caches for ${memberIds.length} users after expense creation`
+      );
+    } catch (cacheError) {
+      console.log(`Debt cache invalidation error: ${cacheError.message}`);
+    }
 
     const isCreatorMember = members.some((member) => member.user_id === userId);
     if (!isCreatorMember) {
@@ -495,7 +504,6 @@ export const createGroupExpense = async (req, res) => {
     }
   }
 };
-
 
 export const getGroupExpense = async (req, res) => {
   let client;

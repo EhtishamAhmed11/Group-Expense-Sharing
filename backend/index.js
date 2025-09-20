@@ -7,6 +7,7 @@ import userRoutes from "./routes/user.routes.js";
 import expenseRoutes from "./routes/expense.routes.js";
 import groupRoutes from "./routes/groups.routes.js";
 import groupExpenseRoutes from "./routes/groupExpense.routes.js";
+import debtRoutes from "./routes/debt.routes.js";
 import cookieParser from "cookie-parser";
 import cors from "cors";
 dotenv.config();
@@ -27,6 +28,7 @@ app.use("/api/user", userRoutes);
 app.use("/api/expense", expenseRoutes);
 app.use("/api/groups", groupRoutes);
 app.use("/api/group-expense", groupExpenseRoutes);
+app.use("/api/debt", debtRoutes);
 app.get("/helper", (_, res) => {
   try {
     res.status(200).json({ message: "API is working" });

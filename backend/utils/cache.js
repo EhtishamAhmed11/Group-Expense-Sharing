@@ -456,6 +456,28 @@ class CacheService {
       return false;
     }
   }
+
+  async invalidateDebtCaches(userIds = []) {
+    try {
+      const promises = [];
+
+      for (const userId of userIds) {
+        promises.push(this.client.del(`user_debts:${userId}`));
+        promises.push(this.client.del(`user_debts_detailed:${userId}`));
+      }
+      const debtKeys = await this.client.keys("user_debts:*");
+      const detailedDebtKeys = await this.client.keys("user_debts_detailed:*");
+
+      if (debtKeys.length > 0) promises.push(this.client.del(debtKeys));
+      if (detailedDebtKeys.length > 0)
+        promises.push(this.client.del(detailedDebtKeys));
+
+      await Promise.all(promises);
+      console.log(`Invalidated debt caches for ${userIds.length} users`);
+    } catch (error) {
+      console.log(`Error invalidating debt caches: ${error.message}`);
+    }
+  }
 }
 
 export const cacheService = new CacheService();

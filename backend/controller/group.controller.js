@@ -767,12 +767,16 @@ RETURNING id, role, joined_at, is_active;
     );
 
     await client.query("COMMIT");
-
+    const allAffectedMembers = [...existingMemberIds, userId];
     try {
       await cacheService.invalidateCachesForNewMember(
         userId,
         group.id,
         existingMemberIds
+      );
+      await cacheService.invalidateDebtCaches(allAffectedMembers);
+      console.log(
+        `Invalidated debt caches for ${allAffectedMembers.length} users after group join`
       );
     } catch (cacheError) {
       console.log(
