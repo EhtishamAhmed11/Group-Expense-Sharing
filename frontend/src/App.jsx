@@ -16,7 +16,14 @@ import GroupExpenses from "./pages/GroupExpenses";
 import CreateExpense from "./pages/createExpense";
 import DebtSummary from "./pages/DebtSummary";
 import DetailedDebts from "./pages/DetailedDebts";
-import Navbar from "./components/Navbar"; // ✅ import your Navbar
+import Navbar from "./components/Navbar";
+
+// ✅ Import new settlement pages
+import SettleDebt from "./pages/SettleDebt";
+import ConfirmSettlement from "./pages/ConfirmSettlement";
+import SettlementHistory from "./pages/SettlementHistory";
+import SettlementDetails from "./pages/SettlementDetails";
+import CreateSettlement from "./pages/CreateSettlement";
 
 // Protected Route wrapper
 const ProtectedRoute = ({ children }) => {
@@ -147,6 +154,48 @@ const AppContent = () => {
           element={
             <ProtectedRoute>
               <DetailedDebts />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* ✅ Settlement Routes */}
+        <Route
+          path="/settlements"
+          element={
+            <ProtectedRoute>
+              <SettlementHistory />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/settlements/:id"
+          element={
+            <ProtectedRoute>
+              <SettlementDetails />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/settlements/:id/confirm"
+          element={
+            <ProtectedRoute>
+              <ConfirmSettlement />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/settlements/settle/:groupId/:toUserId"
+          element={
+            <ProtectedRoute>
+              <SettleDebt />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/settlements/create"
+          element={
+            <ProtectedRoute>
+              <CreateSettlement />
             </ProtectedRoute>
           }
         />

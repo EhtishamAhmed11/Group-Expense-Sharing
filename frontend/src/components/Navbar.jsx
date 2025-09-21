@@ -15,6 +15,7 @@ const Navbar = () => {
     { label: "Expenses", path: "/expenses" },
     { label: "Groups", path: "/groups" },
     { label: "Debt", path: "/debt" },
+    { label: "Settlements", path: "/settlements" }, // ✅ new menu item
     { label: "Profile", path: "/profile" },
   ];
 

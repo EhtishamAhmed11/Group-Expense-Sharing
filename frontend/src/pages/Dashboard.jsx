@@ -24,10 +24,18 @@ const Dashboard = () => {
     groups: [],
   });
 
+  const [settlementData, setSettlementData] = useState({
+    totalSettlements: 0,
+    totalAmount: 0,
+    pendingCount: 0,
+    confirmedCount: 0,
+    disputedCount: 0,
+    actionRequiredCount: 0,
+  });
+
   const [dashboardLoading, setDashboardLoading] = useState(true);
   const API_BASE_URL = "http://localhost:3005/api";
 
-  // ---------------- Fetch Dashboard Data ----------------
   const fetchDashboardData = async () => {
     try {
       setDashboardLoading(true);
@@ -46,6 +54,7 @@ const Dashboard = () => {
         recurringResponse,
         recentExpensesResponse,
         groupsResponse,
+        settlementsResponse, // ✅ settlements
       ] = await Promise.all([
         fetch(
           `${API_BASE_URL}/expense/get-expenses?limit=100&dateFrom=${dateFrom}&dateTo=${dateTo}`,
@@ -66,6 +75,9 @@ const Dashboard = () => {
         fetch(`${API_BASE_URL}/groups/get-user-groups`, {
           credentials: "include",
         }),
+        fetch(`${API_BASE_URL}/settlements/settlements/?limit=1`, {
+          credentials: "include",
+        }),
       ]);
 
       const [
@@ -75,6 +87,7 @@ const Dashboard = () => {
         recurringData,
         recentExpensesData,
         groupsData,
+        settlementsData, // ✅ settlements
       ] = await Promise.all([
         expensesResponse.json(),
         allExpensesResponse.json(),
@@ -82,6 +95,7 @@ const Dashboard = () => {
         recurringResponse.json(),
         recentExpensesResponse.json(),
         groupsResponse.json(),
+        settlementsResponse.json(),
       ]);
 
       // ---------- Personal ----------
@@ -159,6 +173,19 @@ const Dashboard = () => {
           groups,
         });
       }
+
+      // ---------- Settlements ----------
+      if (settlementsData.success) {
+        const summary = settlementsData.data.summary || {};
+        setSettlementData({
+          totalSettlements: summary.totalSettlements || 0,
+          totalAmount: summary.totalAmount || 0,
+          pendingCount: summary.pendingCount || 0,
+          confirmedCount: summary.confirmedCount || 0,
+          disputedCount: summary.disputedCount || 0,
+          actionRequiredCount: summary.actionRequiredCount || 0,
+        });
+      }
     } catch (error) {
       console.error("Failed to fetch dashboard data:", error);
     } finally {
@@ -172,7 +199,6 @@ const Dashboard = () => {
     }
   }, [user, location.pathname]);
 
-  // ---------------- Overview UI ----------------
   const renderOverview = () => (
     <div style={{ padding: "20px" }}>
       <h2>Dashboard Overview</h2>
@@ -251,6 +277,56 @@ const Dashboard = () => {
               />
             </div>
           </div>
+
+          {/* Settlements Summary */}
+          <div style={{ marginTop: "40px" }}>
+            <h3>Settlements</h3>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
+                gap: "20px",
+                marginTop: "20px",
+              }}
+            >
+              <SummaryCard
+                title="Total Settlements"
+                value={settlementData.totalSettlements}
+                color="#20c997"
+                subtitle="All time"
+              />
+              <SummaryCard
+                title="Total Amount"
+                value={`$${settlementData.totalAmount.toFixed(2)}`}
+                color="#6610f2"
+                subtitle="All settlements"
+              />
+              <SummaryCard
+                title="Pending"
+                value={settlementData.pendingCount}
+                color="#ffc107"
+                subtitle="Waiting for confirmation"
+              />
+              <SummaryCard
+                title="Confirmed"
+                value={settlementData.confirmedCount}
+                color="#28a745"
+                subtitle="Completed successfully"
+              />
+              <SummaryCard
+                title="Disputed"
+                value={settlementData.disputedCount}
+                color="#dc3545"
+                subtitle="Needs resolution"
+              />
+              <SummaryCard
+                title="Action Required"
+                value={settlementData.actionRequiredCount}
+                color="#fd7e14"
+                subtitle="Your attention needed"
+              />
+            </div>
+          </div>
         </>
       )}
     </div>
@@ -259,7 +335,6 @@ const Dashboard = () => {
   return <div>{location.pathname === "/dashboard" && renderOverview()}</div>;
 };
 
-// Reusable summary card
 const SummaryCard = ({ title, value, color, subtitle }) => (
   <div
     style={{ border: "1px solid #ddd", padding: "20px", borderRadius: "8px" }}

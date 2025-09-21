@@ -3,7 +3,7 @@ import React, { useEffect, useState } from "react";
 import DebtChart from "./DebtChart";
 import { useNavigate, useLocation } from "react-router-dom";
 
-const API_BASE_URL = "http://localhost:3005/api"; // change if different
+const API_BASE_URL = "http://localhost:3005/api";
 
 const SummaryCard = ({ title, value, subtitle }) => (
   <div style={{ border: "1px solid #ddd", padding: 12, borderRadius: 8 }}>
@@ -83,6 +83,7 @@ export default function DebtSummary() {
         </button>
       )}
 
+      {/* Top Summary */}
       <div
         style={{
           display: "grid",
@@ -154,12 +155,25 @@ export default function DebtSummary() {
                     >
                       {g.netBalance >= 0 ? "You're owed" : "You owe"}
                     </div>
-                    <div style={{ marginTop: 8 }}>
+                    <div style={{ marginTop: 8, display: "flex", gap: 6 }}>
                       <button
                         onClick={() => openDetailed(g.groupId)}
                         style={{ padding: "6px 10px", borderRadius: 6 }}
                       >
                         View
+                      </button>
+                      <button
+                        onClick={() =>
+                          navigate(`/settlements/create?groupId=${g.groupId}`)
+                        }
+                        style={{
+                          padding: "6px 10px",
+                          borderRadius: 6,
+                          background: "#28a745",
+                          color: "white",
+                        }}
+                      >
+                        Settle Up
                       </button>
                     </div>
                   </div>
@@ -190,12 +204,27 @@ export default function DebtSummary() {
                 <div style={{ marginTop: 6 }}>
                   Amount you owe: ${d.userDebtAmount.toFixed(2)}
                 </div>
-                <div style={{ marginTop: 6 }}>
+                <div style={{ marginTop: 6, display: "flex", gap: 8 }}>
                   <button
                     onClick={() => openDetailed(d.groupId)}
                     style={{ padding: "6px 10px", borderRadius: 6 }}
                   >
                     Open group
+                  </button>
+                  <button
+                    onClick={() =>
+                      navigate(
+                        `/settlements/create?groupId=${d.groupId}&otherUserId=${d.payerId}`
+                      )
+                    }
+                    style={{
+                      padding: "6px 10px",
+                      borderRadius: 6,
+                      background: "#007bff",
+                      color: "white",
+                    }}
+                  >
+                    Settle with {d.payerName}
                   </button>
                 </div>
               </div>

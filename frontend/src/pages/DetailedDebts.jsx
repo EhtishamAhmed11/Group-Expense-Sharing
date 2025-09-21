@@ -1,3 +1,4 @@
+// DetailedDebts.jsx
 import React, { useEffect, useState } from "react";
 import DebtChart from "./DebtChart";
 import { useNavigate, useParams } from "react-router-dom";
@@ -11,17 +12,14 @@ export default function DetailedDebts() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [data, setData] = useState(null);
-  const handleBack = () => {
-    navigate("/debt"); // go back in browser history
-  };
+
   // Search & filter state
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [overdueOnly, setOverdueOnly] = useState(false);
-  const [minAmount, setMinAmount] = useState(""); // string so input can stay empty
-  const [roleFilter, setRoleFilter] = useState("all"); // 'all' | 'user_owes' | 'user_is_owed'
+  const [minAmount, setMinAmount] = useState("");
+  const [roleFilter, setRoleFilter] = useState("all");
 
-  // debounce searchTerm -> debouncedSearch (300ms)
   useEffect(() => {
     const t = setTimeout(() => {
       setDebouncedSearch(searchTerm.trim().toLowerCase());
@@ -41,13 +39,8 @@ export default function DetailedDebts() {
       setLoading(true);
       setError(null);
 
-      const res = await fetch(url, {
-        method: "GET",
-        credentials: "include",
-      });
-
+      const res = await fetch(url, { method: "GET", credentials: "include" });
       const json = await res.json();
-      console.log("DetailedDebts response:", json);
 
       if (!json.success) throw new Error(json.message || "Failed to load");
       setData(json.data);
@@ -60,38 +53,34 @@ export default function DetailedDebts() {
   };
 
   useEffect(() => {
-    // reset filters on group change
     setSearchTerm("");
     setDebouncedSearch("");
     setOverdueOnly(false);
     setMinAmount("");
     setRoleFilter("all");
-
     fetchDetailed();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groupId]);
 
   if (loading) return <div>Loading detailed debts...</div>;
-
   if (error)
     return (
       <div style={{ padding: 16 }}>
         <div style={{ color: "red", marginBottom: 8 }}>{error}</div>
         <div>
-          <button onClick={handleBack} style={{ marginRight: 8 }}>
+          <button onClick={() => navigate("/debt")} style={{ marginRight: 8 }}>
             Back
           </button>
           <button onClick={() => fetchDetailed()}>Retry</button>
         </div>
       </div>
     );
-
   if (!data)
     return (
       <div style={{ padding: 16 }}>
         <div>No data to show.</div>
         <div style={{ marginTop: 8 }}>
-          <button onClick={handleBack} style={{ marginRight: 8 }}>
+          <button onClick={() => navigate("/debt")} style={{ marginRight: 8 }}>
             Back
           </button>
           <button onClick={() => fetchDetailed()}>Refresh</button>
@@ -99,18 +88,13 @@ export default function DetailedDebts() {
       </div>
     );
 
-  // Raw arrays
   const rawNetBalances = Object.values(data.netBalances || {});
   const rawPeopleOweUser = Object.values(data.peopleWhoOweUser || {});
   const rawPeopleUserOwes = Object.values(data.peopleUserOwes || {});
 
-  // helper: safe string include
-  const matches = (text, q) => {
-    if (!text || !q) return false;
-    return String(text).toLowerCase().includes(q);
-  };
+  const matches = (text, q) =>
+    text && q ? String(text).toLowerCase().includes(q) : false;
 
-  // Build overdue map
   const overdueMap = {};
   const addOverdueInfo = (entry) => {
     if (!entry?.person || !entry?.group || !Array.isArray(entry.expenses))
@@ -121,74 +105,53 @@ export default function DetailedDebts() {
   rawPeopleOweUser.forEach(addOverdueInfo);
   rawPeopleUserOwes.forEach(addOverdueInfo);
 
-  // compute totals
-  const totalAmountForEntry = (entry) => {
-    if (!entry) return 0;
-    if (typeof entry.totalAmount === "number") return entry.totalAmount;
-    if (!Array.isArray(entry.expenses)) return 0;
-    return entry.expenses.reduce(
-      (s, e) => s + (parseFloat(e.debtAmount) || 0),
-      0
-    );
-  };
+  const totalAmountForEntry = (entry) =>
+    entry?.totalAmount ??
+    (Array.isArray(entry?.expenses)
+      ? entry.expenses.reduce((s, e) => s + (parseFloat(e.debtAmount) || 0), 0)
+      : 0);
 
-  // parse numeric minAmount
   const minAmountNum = parseFloat(minAmount);
   const hasMinAmount = !Number.isNaN(minAmountNum) && minAmount !== "";
-
   const q = debouncedSearch;
 
-  // filter netBalances
   const filterNetBalances = (arr) =>
     arr.filter((b) => {
       if (roleFilter === "user_owes" && b.netPosition !== "user_owes")
         return false;
       if (roleFilter === "user_is_owed" && b.netPosition !== "user_is_owed")
         return false;
-
       if (hasMinAmount && Math.abs(b.netAmount || 0) < minAmountNum)
         return false;
-
-      if (overdueOnly) {
-        const key = `${b.person.id}_${b.group.id}`;
-        if (!overdueMap[key]) return false;
-      }
-
+      if (overdueOnly && !overdueMap[`${b.person.id}_${b.group.id}`])
+        return false;
       if (!q) return true;
-      if (matches(b.person?.name, q) || matches(b.group?.name, q)) return true;
-
-      return false;
+      return matches(b.person?.name, q) || matches(b.group?.name, q);
     });
 
-  // filter people lists
   const filterPeopleList = (arr) =>
     arr.filter((entry) => {
       let netPos = "settled";
       const theyOwe = parseFloat(entry.theyOwe || 0);
       const userOwes = parseFloat(entry.userOwes || 0);
       const netAmount = theyOwe - userOwes;
-
       if (netAmount > 0) netPos = "user_is_owed";
       else if (netAmount < 0) netPos = "user_owes";
 
       if (roleFilter === "user_owes" && netPos !== "user_owes") return false;
       if (roleFilter === "user_is_owed" && netPos !== "user_is_owed")
         return false;
-
       if (hasMinAmount && Math.abs(totalAmountForEntry(entry)) < minAmountNum)
         return false;
-
-      const key = `${entry.person.id}_${entry.group.id}`;
-      if (overdueOnly && !overdueMap[key]) return false;
+      if (overdueOnly && !overdueMap[`${entry.person.id}_${entry.group.id}`])
+        return false;
 
       if (!q) return true;
       if (matches(entry.person?.name, q) || matches(entry.group?.name, q))
         return true;
-      if (Array.isArray(entry.expenses)) {
-        return entry.expenses.some((e) => matches(e.description, q));
-      }
-
-      return false;
+      return Array.isArray(entry.expenses)
+        ? entry.expenses.some((e) => matches(e.description, q))
+        : false;
     });
 
   const netBalancesArray = filterNetBalances(rawNetBalances);
@@ -207,9 +170,7 @@ export default function DetailedDebts() {
           flexWrap: "wrap",
         }}
       >
-        <h2 style={{ margin: 0 }}>
-          Detailed debts {groupId ? `— group ${groupId}` : ""}
-        </h2>
+        <h2 style={{ margin: 0 }}>Detailed debts — group {groupId}</h2>
         <div
           style={{
             display: "flex",
@@ -274,7 +235,7 @@ export default function DetailedDebts() {
             </select>
           </label>
           <button
-            onClick={handleBack}
+            onClick={() => navigate("/debt")}
             style={{ padding: "8px 10px", borderRadius: 6 }}
           >
             Back
@@ -285,10 +246,22 @@ export default function DetailedDebts() {
           >
             Refresh
           </button>
+          {/* ✅ Quick "Settle group" button */}
+          <button
+            onClick={() => navigate(`/settlements/create?groupId=${groupId}`)}
+            style={{
+              padding: "8px 10px",
+              borderRadius: 6,
+              background: "#28a745",
+              color: "white",
+            }}
+          >
+            Settle Group Debts
+          </button>
         </div>
       </div>
 
-      {/* Layout: list + sidebar */}
+      {/* Layout */}
       <div
         style={{
           display: "grid",
@@ -333,6 +306,23 @@ export default function DetailedDebts() {
                     Has overdue expenses
                   </div>
                 )}
+                <div style={{ marginTop: 8 }}>
+                  <button
+                    onClick={() =>
+                      navigate(
+                        `/settlements/create?groupId=${groupId}&otherUserId=${b.person.id}`
+                      )
+                    }
+                    style={{
+                      padding: "6px 10px",
+                      borderRadius: 6,
+                      background: "#007bff",
+                      color: "white",
+                    }}
+                  >
+                    Settle with {b.person.name}
+                  </button>
+                </div>
               </div>
             ))
           )}
@@ -380,6 +370,23 @@ export default function DetailedDebts() {
                     </div>
                   ))}
                 </div>
+                <div style={{ marginTop: 8 }}>
+                  <button
+                    onClick={() =>
+                      navigate(
+                        `/settlements/create?groupId=${groupId}&otherUserId=${p.person.id}`
+                      )
+                    }
+                    style={{
+                      padding: "6px 10px",
+                      borderRadius: 6,
+                      background: "#28a745",
+                      color: "white",
+                    }}
+                  >
+                    Settle with {p.person.name}
+                  </button>
+                </div>
               </div>
             ))
           )}
@@ -426,6 +433,23 @@ export default function DetailedDebts() {
                       </div>
                     </div>
                   ))}
+                </div>
+                <div style={{ marginTop: 8 }}>
+                  <button
+                    onClick={() =>
+                      navigate(
+                        `/settlements/create?groupId=${groupId}&otherUserId=${p.person.id}`
+                      )
+                    }
+                    style={{
+                      padding: "6px 10px",
+                      borderRadius: 6,
+                      background: "#dc3545",
+                      color: "white",
+                    }}
+                  >
+                    Pay {p.person.name}
+                  </button>
                 </div>
               </div>
             ))
