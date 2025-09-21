@@ -1,4 +1,48 @@
-import React, { useState, useEffect } from "react";
+"use client";
+
+import { useState, useEffect } from "react";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  Typography,
+  Button,
+  Box,
+  TextField,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  Chip,
+  CircularProgress,
+  Alert,
+  Grid,
+  Container,
+  Checkbox,
+  FormControlLabel,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Divider,
+} from "@mui/material";
+import {
+  Plus,
+  Search,
+  Filter,
+  Edit,
+  Trash2,
+  Calendar,
+  DollarSign,
+  MapPin,
+  CreditCard,
+  Tag,
+  Receipt,
+  RefreshCw,
+  FileText,
+  Repeat,
+} from "lucide-react";
+import { toast } from "react-hot-toast";
 
 const ExpenseManagement = () => {
   const [currentView, setCurrentView] = useState("list"); // 'list', 'create', 'edit'
@@ -7,6 +51,8 @@ const ExpenseManagement = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [editingExpense, setEditingExpense] = useState(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [expenseToDelete, setExpenseToDelete] = useState(null);
   const [filters, setFilters] = useState({
     page: 1,
     limit: 20,
@@ -43,11 +89,14 @@ const ExpenseManagement = () => {
       if (data.success) {
         setExpenses(data.data.expenses || []);
       } else {
-        setError(data.message || "Failed to fetch expenses");
+        const errorMsg = data.message || "Failed to fetch expenses";
+        setError(errorMsg);
+        toast.error(errorMsg);
       }
     } catch (error) {
-      setError("Network error occurred");
-      console.error("Fetch expenses error:", error);
+      const errorMsg = "Network error occurred";
+      setError(errorMsg);
+      toast.error(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -59,7 +108,6 @@ const ExpenseManagement = () => {
       const response = await fetch(`${API_BASE_URL}/expense/get-categories`, {
         credentials: "include",
       });
-
       const data = await response.json();
       if (data.success) {
         setCategories(data.data.categories || []);
@@ -69,382 +117,420 @@ const ExpenseManagement = () => {
     }
   };
 
-  // Load data on component mount
   useEffect(() => {
     fetchExpenses();
     fetchCategories();
   }, [filters]);
 
-  // Handle filter changes
   const handleFilterChange = (filterName, value) => {
-    setFilters((prev) => ({
-      ...prev,
-      [filterName]: value,
-      page: 1, // Reset to first page when filtering
-    }));
+    setFilters((prev) => ({ ...prev, [filterName]: value, page: 1 }));
   };
 
-  // Delete expense
   const handleDeleteExpense = async (expenseId) => {
-    if (!confirm("Are you sure you want to delete this expense?")) {
-      return;
-    }
-
     try {
       const response = await fetch(
         `${API_BASE_URL}/expense/delete-expense/${expenseId}`,
-        {
-          method: "DELETE",
-          credentials: "include",
-        }
+        { method: "DELETE", credentials: "include" }
       );
-
       const data = await response.json();
       if (data.success) {
-        fetchExpenses(); // Refresh list
+        toast.success("Expense deleted successfully!");
+        fetchExpenses();
       } else {
-        setError(data.message || "Failed to delete expense");
+        toast.error(data.message || "Failed to delete expense");
       }
     } catch (error) {
-      setError("Network error occurred");
+      toast.error("Network error occurred");
+    } finally {
+      setDeleteDialogOpen(false);
+      setExpenseToDelete(null);
     }
   };
 
-  // Handle edit expense
   const handleEditExpense = (expense) => {
     setEditingExpense(expense);
     setCurrentView("edit");
   };
 
-  // Render filters
   const renderFilters = () => (
-    <div
-      style={{
-        padding: "20px",
-        border: "1px solid #ddd",
-        borderRadius: "8px",
-        marginBottom: "20px",
-      }}
-    >
-      <h3>Filters</h3>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-          gap: "15px",
-          marginTop: "15px",
-        }}
-      >
-        <div>
-          <label style={{ display: "block", marginBottom: "5px" }}>
-            Search:
-          </label>
-          <input
-            type="text"
-            value={filters.search}
-            onChange={(e) => handleFilterChange("search", e.target.value)}
-            placeholder="Search description or location"
-            style={{ width: "100%", padding: "8px" }}
-          />
-        </div>
-
-        <div>
-          <label style={{ display: "block", marginBottom: "5px" }}>
-            Category:
-          </label>
-          <select
-            value={filters.category}
-            onChange={(e) => handleFilterChange("category", e.target.value)}
-            style={{ width: "100%", padding: "8px" }}
-          >
-            <option value="">All Categories</option>
-            {categories.map((category) => (
-              <option key={category.id} value={category.name}>
-                {category.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label style={{ display: "block", marginBottom: "5px" }}>
-            Payment Method:
-          </label>
-          <select
-            value={filters.paymentMethod}
-            onChange={(e) =>
-              handleFilterChange("paymentMethod", e.target.value)
-            }
-            style={{ width: "100%", padding: "8px" }}
-          >
-            <option value="">All Methods</option>
-            <option value="cash">Cash</option>
-            <option value="credit_card">Credit Card</option>
-            <option value="debit_card">Debit Card</option>
-            <option value="digital_wallet">Digital Wallet</option>
-            <option value="bank_transfer">Bank Transfer</option>
-          </select>
-        </div>
-
-        <div>
-          <label style={{ display: "block", marginBottom: "5px" }}>
-            Date From:
-          </label>
-          <input
-            type="date"
-            value={filters.dateFrom}
-            onChange={(e) => handleFilterChange("dateFrom", e.target.value)}
-            style={{ width: "100%", padding: "8px" }}
-          />
-        </div>
-
-        <div>
-          <label style={{ display: "block", marginBottom: "5px" }}>
-            Date To:
-          </label>
-          <input
-            type="date"
-            value={filters.dateTo}
-            onChange={(e) => handleFilterChange("dateTo", e.target.value)}
-            style={{ width: "100%", padding: "8px" }}
-          />
-        </div>
-
-        <div>
-          <label style={{ display: "block", marginBottom: "5px" }}>
-            Recurring:
-          </label>
-          <select
-            value={filters.recurring}
-            onChange={(e) => handleFilterChange("recurring", e.target.value)}
-            style={{ width: "100%", padding: "8px" }}
-          >
-            <option value="">All</option>
-            <option value="true">Recurring Only</option>
-            <option value="false">Non-recurring Only</option>
-          </select>
-        </div>
-      </div>
-
-      <button
-        onClick={() =>
-          setFilters({
-            page: 1,
-            limit: 20,
-            category: "",
-            dateFrom: "",
-            dateTo: "",
-            paymentMethod: "",
-            recurring: "",
-            minAmount: "",
-            maxAmount: "",
-            search: "",
-          })
+    <Card className="rounded-xl shadow-md mb-6">
+      <CardHeader
+        className="pb-3"
+        title={
+          <Box className="flex items-center gap-2">
+            <Filter className="text-gray-600 w-5 h-5" />
+            <Typography
+              variant="h6"
+              fontFamily="Inter, sans-serif"
+              fontWeight={600}
+            >
+              Filters & Search
+            </Typography>
+          </Box>
         }
-        style={{
-          marginTop: "15px",
-          padding: "8px 16px",
-          backgroundColor: "#6c757d",
-          color: "white",
-          border: "none",
-        }}
-      >
-        Clear Filters
-      </button>
-    </div>
+      />
+      <CardContent>
+        <Grid container spacing={3}>
+          <Grid item xs={12} md={4}>
+            <TextField
+              fullWidth
+              label="Search"
+              value={filters.search}
+              onChange={(e) => handleFilterChange("search", e.target.value)}
+              placeholder="Search description or location"
+              size="small"
+              InputProps={{
+                startAdornment: (
+                  <Search className="w-4 h-4 mr-2 text-gray-400" />
+                ),
+              }}
+            />
+          </Grid>
+          <Grid item xs={12} md={2}>
+            <FormControl fullWidth size="small">
+              <InputLabel>Category</InputLabel>
+              <Select
+                value={filters.category}
+                onChange={(e) => handleFilterChange("category", e.target.value)}
+                label="Category"
+              >
+                <MenuItem value="">All Categories</MenuItem>
+                {categories.map((c) => (
+                  <MenuItem key={c.id} value={c.name}>
+                    {c.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
+          <Grid item xs={12} md={2}>
+            <FormControl fullWidth size="small">
+              <InputLabel>Payment Method</InputLabel>
+              <Select
+                value={filters.paymentMethod}
+                onChange={(e) =>
+                  handleFilterChange("paymentMethod", e.target.value)
+                }
+                label="Payment Method"
+              >
+                <MenuItem value="">All Methods</MenuItem>
+                <MenuItem value="cash">Cash</MenuItem>
+                <MenuItem value="credit_card">Credit Card</MenuItem>
+                <MenuItem value="debit_card">Debit Card</MenuItem>
+                <MenuItem value="digital_wallet">Digital Wallet</MenuItem>
+                <MenuItem value="bank_transfer">Bank Transfer</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
+          <Grid item xs={12} md={2}>
+            <TextField
+              fullWidth
+              label="Date From"
+              type="date"
+              value={filters.dateFrom}
+              onChange={(e) => handleFilterChange("dateFrom", e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              size="small"
+            />
+          </Grid>
+          <Grid item xs={12} md={2}>
+            <TextField
+              fullWidth
+              label="Date To"
+              type="date"
+              value={filters.dateTo}
+              onChange={(e) => handleFilterChange("dateTo", e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              size="small"
+            />
+          </Grid>
+          <Grid item xs={12} md={2}>
+            <FormControl fullWidth size="small">
+              <InputLabel>Recurring</InputLabel>
+              <Select
+                value={filters.recurring}
+                onChange={(e) =>
+                  handleFilterChange("recurring", e.target.value)
+                }
+                label="Recurring"
+              >
+                <MenuItem value="">All</MenuItem>
+                <MenuItem value="true">Recurring Only</MenuItem>
+                <MenuItem value="false">Non-recurring Only</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
+        </Grid>
+
+        <Box className="flex justify-end mt-4">
+          <Button
+            variant="outlined"
+            startIcon={<RefreshCw className="w-4 h-4" />}
+            onClick={() =>
+              setFilters({
+                page: 1,
+                limit: 20,
+                category: "",
+                dateFrom: "",
+                dateTo: "",
+                paymentMethod: "",
+                recurring: "",
+                minAmount: "",
+                maxAmount: "",
+                search: "",
+              })
+            }
+            sx={{ textTransform: "none" }}
+          >
+            Clear Filters
+          </Button>
+        </Box>
+      </CardContent>
+    </Card>
   );
 
-  // Render expense list
   const renderExpenseList = () => (
-    <div>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: "20px",
-        }}
-      >
-        <h2>Expenses</h2>
-        <button
+    <Container maxWidth="xl" className="py-8">
+      <Box className="mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <Box>
+          <Typography
+            variant="h4"
+            fontFamily="Inter, sans-serif"
+            fontWeight={700}
+            className="text-gray-900 mb-1"
+          >
+            Expense Management
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Track and manage all your personal expenses
+          </Typography>
+        </Box>
+        <Button
+          variant="contained"
+          startIcon={<Plus className="w-4 h-4" />}
           onClick={() => setCurrentView("create")}
-          style={{
-            padding: "10px 20px",
-            backgroundColor: "#007bff",
-            color: "white",
-            border: "none",
+          sx={{
+            textTransform: "none",
+            backgroundColor: "rgb(37, 99, 235)",
+            "&:hover": { backgroundColor: "rgb(29, 78, 216)" },
           }}
         >
           Add New Expense
-        </button>
-      </div>
+        </Button>
+      </Box>
 
       {renderFilters()}
 
       {error && (
-        <div
-          style={{
-            color: "red",
-            padding: "10px",
-            border: "1px solid red",
-            borderRadius: "4px",
-            marginBottom: "20px",
-          }}
-        >
+        <Alert severity="error" className="rounded-lg mb-4">
           {error}
-        </div>
+        </Alert>
       )}
 
       {loading ? (
-        <div>Loading expenses...</div>
+        <Box className="flex items-center justify-center h-64 space-x-3">
+          <CircularProgress size={28} />
+          <Typography variant="body2" color="text.secondary">
+            Loading expenses...
+          </Typography>
+        </Box>
+      ) : expenses.length === 0 ? (
+        <Card className="rounded-xl shadow-md">
+          <CardContent className="text-center py-12">
+            <Receipt className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+            <Typography variant="h6" color="text.secondary" className="mb-2">
+              No expenses found
+            </Typography>
+            <Typography variant="body2" color="text.secondary" className="mb-4">
+              Start by adding your first expense
+            </Typography>
+            <Button
+              variant="contained"
+              startIcon={<Plus className="w-4 h-4" />}
+              onClick={() => setCurrentView("create")}
+              sx={{
+                textTransform: "none",
+                backgroundColor: "rgb(37, 99, 235)",
+                "&:hover": { backgroundColor: "rgb(29, 78, 216)" },
+              }}
+            >
+              Add Expense
+            </Button>
+          </CardContent>
+        </Card>
       ) : (
-        <div>
-          {expenses.length === 0 ? (
-            <div style={{ textAlign: "center", padding: "40px" }}>
-              <p>No expenses found</p>
-            </div>
-          ) : (
-            <div>
-              {expenses.map((expense) => (
-                <div
-                  key={expense.id}
-                  style={{
-                    border: "1px solid #ddd",
-                    borderRadius: "8px",
-                    padding: "15px",
-                    marginBottom: "15px",
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "flex-start",
-                    }}
-                  >
-                    <div style={{ flex: 1 }}>
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          marginBottom: "10px",
-                        }}
+        <Box className="space-y-4">
+          {expenses.map((expense) => (
+            <Card
+              key={expense.id}
+              className="rounded-xl shadow-md hover:shadow-lg transition-all duration-200"
+            >
+              <CardContent className="p-6">
+                <Box className="flex flex-col md:flex-row justify-between gap-4">
+                  <Box className="flex-1">
+                    <Box className="flex items-center flex-wrap gap-2 mb-2">
+                      <Typography
+                        variant="h5"
+                        fontWeight={700}
+                        className="text-gray-900"
                       >
-                        <h4 style={{ margin: 0, marginRight: "15px" }}>
-                          ${expense.amount}
-                        </h4>
-                        <span
-                          style={{
+                        ${expense.amount}
+                      </Typography>
+                      {expense.category?.name && (
+                        <Chip
+                          label={expense.category.name}
+                          size="small"
+                          sx={{
                             backgroundColor:
-                              expense.category?.color || "#007bff",
+                              expense.category?.color || "rgb(37, 99, 235)",
                             color: "white",
-                            padding: "4px 8px",
-                            borderRadius: "12px",
-                            fontSize: "12px",
                           }}
-                        >
-                          {expense.category?.name}
-                        </span>
-                        {expense.isRecurring && (
-                          <span
-                            style={{
-                              backgroundColor: "#28a745",
-                              color: "white",
-                              padding: "4px 8px",
-                              borderRadius: "12px",
-                              fontSize: "12px",
-                              marginLeft: "8px",
-                            }}
-                          >
-                            Recurring
-                          </span>
-                        )}
-                      </div>
-                      <p style={{ margin: "5px 0", fontWeight: "bold" }}>
-                        {expense.description}
-                      </p>
-                      <p
-                        style={{
-                          margin: "5px 0",
-                          color: "#666",
-                          fontSize: "14px",
-                        }}
+                        />
+                      )}
+                      {expense.isRecurring && (
+                        <Chip
+                          label="Recurring"
+                          size="small"
+                          color="success"
+                          variant="outlined"
+                          icon={<Repeat className="w-3 h-3" />}
+                        />
+                      )}
+                    </Box>
+                    <Typography variant="h6" fontWeight={600} className="mb-2">
+                      {expense.description}
+                    </Typography>
+                    <Grid
+                      container
+                      spacing={2}
+                      className="text-sm text-gray-600"
+                    >
+                      <Grid
+                        item
+                        xs={12}
+                        sm={6}
+                        md={3}
+                        className="flex items-center gap-1"
                       >
-                        Date:{" "}
-                        {new Date(expense.expenseDate).toLocaleDateString()}
-                      </p>
+                        <Calendar className="w-4 h-4" />
+                        <span>
+                          {new Date(expense.expenseDate).toLocaleDateString()}
+                        </span>
+                      </Grid>
                       {expense.paymentMethod && (
-                        <p
-                          style={{
-                            margin: "5px 0",
-                            color: "#666",
-                            fontSize: "14px",
-                          }}
+                        <Grid
+                          item
+                          xs={12}
+                          sm={6}
+                          md={3}
+                          className="flex items-center gap-1"
                         >
-                          Payment:{" "}
-                          {expense.paymentMethod
-                            .replace("_", " ")
-                            .toUpperCase()}
-                        </p>
+                          <CreditCard className="w-4 h-4" />
+                          <span>
+                            {expense.paymentMethod
+                              .replace("_", " ")
+                              .toUpperCase()}
+                          </span>
+                        </Grid>
                       )}
                       {expense.location && (
-                        <p
-                          style={{
-                            margin: "5px 0",
-                            color: "#666",
-                            fontSize: "14px",
-                          }}
+                        <Grid
+                          item
+                          xs={12}
+                          sm={6}
+                          md={3}
+                          className="flex items-center gap-1"
                         >
-                          Location: {expense.location}
-                        </p>
+                          <MapPin className="w-4 h-4" />
+                          <span>{expense.location}</span>
+                        </Grid>
                       )}
-                      {expense.notes && (
-                        <p
-                          style={{
-                            margin: "5px 0",
-                            color: "#666",
-                            fontSize: "14px",
-                          }}
-                        >
-                          Notes: {expense.notes}
-                        </p>
-                      )}
-                    </div>
-                    <div style={{ display: "flex", gap: "10px" }}>
-                      <button
-                        onClick={() => handleEditExpense(expense)}
-                        style={{
-                          padding: "6px 12px",
-                          backgroundColor: "#ffc107",
-                          color: "black",
-                          border: "none",
-                        }}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleDeleteExpense(expense.id)}
-                        style={{
-                          padding: "6px 12px",
-                          backgroundColor: "#dc3545",
-                          color: "white",
-                          border: "none",
-                        }}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+                    </Grid>
+                    {expense.notes && (
+                      <Box className="mt-3">
+                        <Typography variant="body2" color="text.secondary">
+                          <FileText className="w-4 h-4 inline mr-1" />
+                          {expense.notes}
+                        </Typography>
+                      </Box>
+                    )}
+                  </Box>
+
+                  <Box className="flex gap-2">
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      startIcon={<Edit className="w-4 h-4" />}
+                      onClick={() => handleEditExpense(expense)}
+                      sx={{ textTransform: "none" }}
+                    >
+                      Edit
+                    </Button>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      color="error"
+                      startIcon={<Trash2 className="w-4 h-4" />}
+                      onClick={() => {
+                        setExpenseToDelete(expense);
+                        setDeleteDialogOpen(true);
+                      }}
+                      sx={{ textTransform: "none" }}
+                    >
+                      Delete
+                    </Button>
+                  </Box>
+                </Box>
+              </CardContent>
+            </Card>
+          ))}
+        </Box>
       )}
-    </div>
+
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={() => setDeleteDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Confirm Delete</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Are you sure you want to delete this expense? This action cannot be
+            undone.
+          </Typography>
+          {expenseToDelete && (
+            <Box className="mt-3 p-3 bg-gray-50 rounded-lg">
+              <Typography variant="subtitle2" fontWeight={600}>
+                {expenseToDelete.description}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                ${expenseToDelete.amount} •{" "}
+                {new Date(expenseToDelete.expenseDate).toLocaleDateString()}
+              </Typography>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => setDeleteDialogOpen(false)}
+            sx={{ textTransform: "none" }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={() => handleDeleteExpense(expenseToDelete?.id)}
+            color="error"
+            variant="contained"
+            sx={{ textTransform: "none" }}
+          >
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </Container>
   );
 
-  // Main render
   switch (currentView) {
     case "create":
       return (
@@ -472,7 +558,6 @@ const ExpenseManagement = () => {
   }
 };
 
-// Expense Form Component
 const ExpenseForm = ({ expense = null, onCancel, onSuccess }) => {
   const [formData, setFormData] = useState({
     amount: expense?.amount || "",
@@ -520,19 +605,18 @@ const ExpenseForm = ({ expense = null, onCancel, onSuccess }) => {
     try {
       const submitData = {
         ...formData,
-        amount: parseFloat(formData.amount),
+        amount: Number.parseFloat(formData.amount),
         tags: formData.tags
           ? formData.tags
               .split(",")
               .map((tag) => tag.trim())
-              .filter((tag) => tag)
+              .filter(Boolean)
           : [],
       };
 
       const url = expense
         ? `${API_BASE_URL}/expense/update-expense/${expense.id}`
         : `${API_BASE_URL}/expense/create`;
-
       const method = expense ? "PATCH" : "POST";
 
       const response = await fetch(url, {
@@ -543,229 +627,303 @@ const ExpenseForm = ({ expense = null, onCancel, onSuccess }) => {
       });
 
       const data = await response.json();
-
       if (data.success) {
+        toast.success(
+          `Expense ${expense ? "updated" : "created"} successfully!`
+        );
         onSuccess();
       } else {
-        setError(
-          data.message || `Failed to ${expense ? "update" : "create"} expense`
-        );
+        const errorMsg =
+          data.message || `Failed to ${expense ? "update" : "create"} expense`;
+        setError(errorMsg);
+        toast.error(errorMsg);
       }
     } catch (error) {
       setError("Network error occurred");
+      toast.error("Network error occurred");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div style={{ maxWidth: "600px", margin: "20px auto" }}>
-      <h2>{expense ? "Edit Expense" : "Add New Expense"}</h2>
-      {error && (
-        <div
-          style={{
-            color: "red",
-            padding: "10px",
-            border: "1px solid red",
-            borderRadius: "4px",
-            marginBottom: "20px",
-          }}
+    <Container maxWidth="md" className="py-8">
+      <Box className="mb-6">
+        <Typography
+          variant="h4"
+          fontFamily="Inter, sans-serif"
+          fontWeight={700}
+          className="mb-2"
         >
-          {error}
-        </div>
-      )}
-      <form onSubmit={handleSubmit}>
-        <div style={{ marginBottom: "15px" }}>
-          <label>Amount:</label>
-          <input
-            type="number"
-            name="amount"
-            value={formData.amount}
-            onChange={handleInputChange}
-            required
-            style={{ width: "100%", padding: "8px" }}
-          />
-        </div>
-        <div style={{ marginBottom: "15px" }}>
-          <label>Description:</label>
-          <input
-            type="text"
-            name="description"
-            value={formData.description}
-            onChange={handleInputChange}
-            required
-            style={{ width: "100%", padding: "8px" }}
-          />
-        </div>
-        <div style={{ marginBottom: "15px" }}>
-          <label>Category:</label>
-          <input
-            type="text"
-            name="category"
-            value={formData.category}
-            onChange={handleInputChange}
-            style={{ width: "100%", padding: "8px" }}
-          />
-        </div>
-        <div style={{ marginBottom: "15px" }}>
-          <label>Notes:</label>
-          <input
-            type="text"
-            name="notes"
-            value={formData.notes}
-            onChange={handleInputChange}
-            style={{ width: "100%", padding: "8px" }}
-          />
-        </div>
-        <div style={{ marginBottom: "15px" }}>
-          <label>Date:</label>
-          <input
-            type="date"
-            name="expenseDate"
-            value={formData.expenseDate}
-            onChange={handleInputChange}
-            required
-            style={{ width: "100%", padding: "8px" }}
-          />
-        </div>
-        <div style={{ marginBottom: "15px" }}>
-          <label>Receipt URL:</label>
-          <input
-            type="text"
-            name="receiptUrl"
-            value={formData.receiptUrl}
-            onChange={handleInputChange}
-            style={{ width: "100%", padding: "8px" }}
-          />
-        </div>
-        <div style={{ marginBottom: "15px" }}>
-          <label>
-            <input
-              type="checkbox"
-              name="isRecurring"
-              checked={formData.isRecurring}
-              onChange={handleInputChange}
-            />
-            Recurring
-          </label>
-        </div>
-        {formData.isRecurring && (
-          <>
-            <div style={{ marginBottom: "15px" }}>
-              <label>Recurring Type:</label>
-              <select
-                name="recurringType"
-                value={formData.recurringType}
-                onChange={handleInputChange}
-                style={{ width: "100%", padding: "8px" }}
+          {expense ? "Edit Expense" : "Add New Expense"}
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          {expense ? "Update expense details" : "Create a new expense entry"}
+        </Typography>
+      </Box>
+
+      <Card className="rounded-xl shadow-md">
+        <CardContent className="p-6">
+          {error && (
+            <Alert severity="error" className="rounded-lg mb-4">
+              {error}
+            </Alert>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <Grid container spacing={3}>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="Amount"
+                  name="amount"
+                  type="number"
+                  value={formData.amount}
+                  onChange={handleInputChange}
+                  required
+                  InputProps={{
+                    startAdornment: (
+                      <DollarSign className="w-4 h-4 mr-2 text-gray-400" />
+                    ),
+                  }}
+                  variant="outlined"
+                />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="Date"
+                  name="expenseDate"
+                  type="date"
+                  value={formData.expenseDate}
+                  onChange={handleInputChange}
+                  required
+                  InputLabelProps={{ shrink: true }}
+                  InputProps={{
+                    startAdornment: (
+                      <Calendar className="w-4 h-4 mr-2 text-gray-400" />
+                    ),
+                  }}
+                  variant="outlined"
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Description"
+                  name="description"
+                  value={formData.description}
+                  onChange={handleInputChange}
+                  required
+                  InputProps={{
+                    startAdornment: (
+                      <FileText className="w-4 h-4 mr-2 text-gray-400" />
+                    ),
+                  }}
+                  variant="outlined"
+                />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="Category"
+                  name="category"
+                  value={formData.category}
+                  onChange={handleInputChange}
+                  InputProps={{
+                    startAdornment: (
+                      <Tag className="w-4 h-4 mr-2 text-gray-400" />
+                    ),
+                  }}
+                  variant="outlined"
+                />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <FormControl fullWidth>
+                  <InputLabel>Payment Method</InputLabel>
+                  <Select
+                    name="paymentMethod"
+                    value={formData.paymentMethod}
+                    onChange={handleInputChange}
+                    label="Payment Method"
+                  >
+                    <MenuItem value="">Select Method</MenuItem>
+                    <MenuItem value="cash">Cash</MenuItem>
+                    <MenuItem value="credit_card">Credit Card</MenuItem>
+                    <MenuItem value="debit_card">Debit Card</MenuItem>
+                    <MenuItem value="digital_wallet">Digital Wallet</MenuItem>
+                    <MenuItem value="bank_transfer">Bank Transfer</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="Location"
+                  name="location"
+                  value={formData.location}
+                  onChange={handleInputChange}
+                  InputProps={{
+                    startAdornment: (
+                      <MapPin className="w-4 h-4 mr-2 text-gray-400" />
+                    ),
+                  }}
+                  variant="outlined"
+                />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="Receipt URL"
+                  name="receiptUrl"
+                  value={formData.receiptUrl}
+                  onChange={handleInputChange}
+                  InputProps={{
+                    startAdornment: (
+                      <Receipt className="w-4 h-4 mr-2 text-gray-400" />
+                    ),
+                  }}
+                  variant="outlined"
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Notes"
+                  name="notes"
+                  value={formData.notes}
+                  onChange={handleInputChange}
+                  multiline
+                  rows={3}
+                  variant="outlined"
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Tags (comma separated)"
+                  name="tags"
+                  value={formData.tags}
+                  onChange={handleInputChange}
+                  variant="outlined"
+                  placeholder="food, restaurant, dinner"
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      name="isRecurring"
+                      checked={formData.isRecurring}
+                      onChange={handleInputChange}
+                    />
+                  }
+                  label="Recurring Expense"
+                />
+              </Grid>
+
+              {formData.isRecurring && (
+                <>
+                  <Grid item xs={12} md={4}>
+                    <FormControl fullWidth>
+                      <InputLabel>Recurring Type</InputLabel>
+                      <Select
+                        name="recurringType"
+                        value={formData.recurringType}
+                        onChange={handleInputChange}
+                        label="Recurring Type"
+                      >
+                        <MenuItem value="weekly">Weekly</MenuItem>
+                        <MenuItem value="monthly">Monthly</MenuItem>
+                        <MenuItem value="yearly">Yearly</MenuItem>
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                  <Grid item xs={12} md={4}>
+                    <TextField
+                      fullWidth
+                      label="Recurring Interval"
+                      name="recurringInterval"
+                      type="number"
+                      value={formData.recurringInterval}
+                      onChange={handleInputChange}
+                      variant="outlined"
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={4}>
+                    <TextField
+                      fullWidth
+                      label="Recurring End Date"
+                      name="recurringEndDate"
+                      type="date"
+                      value={formData.recurringEndDate}
+                      onChange={handleInputChange}
+                      InputLabelProps={{ shrink: true }}
+                      variant="outlined"
+                    />
+                  </Grid>
+                  <Grid item xs={12}>
+                    <TextField
+                      fullWidth
+                      label="Next Due Date"
+                      name="nextDueDate"
+                      type="date"
+                      value={formData.nextDueDate}
+                      onChange={handleInputChange}
+                      InputLabelProps={{ shrink: true }}
+                      variant="outlined"
+                    />
+                  </Grid>
+                </>
+              )}
+            </Grid>
+
+            <Divider className="my-6" />
+
+            <Box className="flex flex-col md:flex-row gap-3">
+              <Button
+                type="button"
+                variant="outlined"
+                onClick={onCancel}
+                className="flex-1"
+                sx={{ textTransform: "none" }}
               >
-                <option value="monthly">Monthly</option>
-                <option value="weekly">Weekly</option>
-                <option value="yearly">Yearly</option>
-              </select>
-            </div>
-            <div style={{ marginBottom: "15px" }}>
-              <label>Recurring Interval:</label>
-              <input
-                type="number"
-                name="recurringInterval"
-                value={formData.recurringInterval}
-                onChange={handleInputChange}
-                style={{ width: "100%", padding: "8px" }}
-              />
-            </div>
-            <div style={{ marginBottom: "15px" }}>
-              <label>Recurring End Date:</label>
-              <input
-                type="date"
-                name="recurringEndDate"
-                value={formData.recurringEndDate}
-                onChange={handleInputChange}
-                style={{ width: "100%", padding: "8px" }}
-              />
-            </div>
-            <div style={{ marginBottom: "15px" }}>
-              <label>Next Due Date:</label>
-              <input
-                type="date"
-                name="nextDueDate"
-                value={formData.nextDueDate}
-                onChange={handleInputChange}
-                style={{ width: "100%", padding: "8px" }}
-              />
-            </div>
-          </>
-        )}
-        <div style={{ marginBottom: "15px" }}>
-          <label>Payment Method:</label>
-          <select
-            name="paymentMethod"
-            value={formData.paymentMethod}
-            onChange={handleInputChange}
-            style={{ width: "100%", padding: "8px" }}
-          >
-            <option value="">Select Method</option>
-            <option value="cash">Cash</option>
-            <option value="credit_card">Credit Card</option>
-            <option value="debit_card">Debit Card</option>
-            <option value="digital_wallet">Digital Wallet</option>
-            <option value="bank_transfer">Bank Transfer</option>
-          </select>
-        </div>
-        <div style={{ marginBottom: "15px" }}>
-          <label>Location:</label>
-          <input
-            type="text"
-            name="location"
-            value={formData.location}
-            onChange={handleInputChange}
-            style={{ width: "100%", padding: "8px" }}
-          />
-        </div>
-        <div style={{ marginBottom: "15px" }}>
-          <label>Tags (comma separated):</label>
-          <input
-            type="text"
-            name="tags"
-            value={formData.tags}
-            onChange={handleInputChange}
-            style={{ width: "100%", padding: "8px" }}
-          />
-        </div>
-        <div style={{ display: "flex", gap: "10px", marginTop: "20px" }}>
-          <button
-            type="submit"
-            disabled={loading}
-            style={{
-              padding: "10px 20px",
-              backgroundColor: "#007bff",
-              color: "white",
-              border: "none",
-            }}
-          >
-            {loading
-              ? expense
-                ? "Updating..."
-                : "Creating..."
-              : expense
-              ? "Update Expense"
-              : "Create Expense"}
-          </button>
-          <button
-            type="button"
-            onClick={onCancel}
-            style={{
-              padding: "10px 20px",
-              backgroundColor: "#6c757d",
-              color: "white",
-              border: "none",
-            }}
-          >
-            Cancel
-          </button>
-        </div>
-      </form>
-    </div>
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                variant="contained"
+                disabled={loading}
+                className="flex-1"
+                sx={{
+                  textTransform: "none",
+                  backgroundColor: "rgb(37, 99, 235)",
+                  "&:hover": { backgroundColor: "rgb(29, 78, 216)" },
+                }}
+                startIcon={
+                  loading ? (
+                    <CircularProgress size={18} color="inherit" />
+                  ) : expense ? (
+                    <Edit className="w-4 h-4" />
+                  ) : (
+                    <Plus className="w-4 h-4" />
+                  )
+                }
+              >
+                {loading
+                  ? expense
+                    ? "Updating..."
+                    : "Creating..."
+                  : expense
+                  ? "Update Expense"
+                  : "Create Expense"}
+              </Button>
+            </Box>
+          </form>
+        </CardContent>
+      </Card>
+    </Container>
   );
 };
+
 export default ExpenseManagement;

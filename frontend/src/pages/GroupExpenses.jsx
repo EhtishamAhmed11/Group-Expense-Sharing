@@ -1,7 +1,35 @@
-// src/pages/GroupExpenses.jsx
+"use client";
+
 import React, { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  Typography,
+  Button,
+  TextField,
+  Grid,
+  Chip,
+  CircularProgress,
+  Box,
+  Divider,
+  Pagination,
+  Avatar,
+} from "@mui/material";
+import {
+  Plus,
+  Search,
+  Filter,
+  DollarSign,
+  Users,
+  User,
+  Calendar,
+  Tag,
+} from "lucide-react";
+
+import toast from "react-hot-toast";
 
 const GroupExpenses = () => {
   const { groupId } = useParams();
@@ -11,7 +39,6 @@ const GroupExpenses = () => {
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Pagination & filters
   const [page, setPage] = useState(1);
   const [limit] = useState(10);
   const [search, setSearch] = useState("");
@@ -32,8 +59,6 @@ const GroupExpenses = () => {
     currentPage: 1,
     totalPages: 1,
     totalExpenses: 0,
-    hasNextPage: false,
-    hasPrevPage: false,
   });
 
   const fetchExpenses = async () => {
@@ -49,9 +74,7 @@ const GroupExpenses = () => {
       const res = await fetch(
         `http://localhost:3005/api/group-expense/${groupId}/expenses?${params.toString()}`,
         {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
+          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
           credentials: "include",
         }
       );
@@ -60,219 +83,281 @@ const GroupExpenses = () => {
       if (data.success) {
         setExpenses(data.data.expenses || []);
         setSummary(data.data.summary || null);
-        if (data.data.pagination) {
-          setPagination(data.data.pagination);
-        }
+        if (data.data.pagination) setPagination(data.data.pagination);
       } else {
-        console.error("Failed to fetch expenses:", data.message);
+        toast.error("Failed to fetch expenses");
       }
     } catch (err) {
-      console.error("Error fetching expenses:", err);
+      console.error(err);
+      toast.error("An error occurred while fetching expenses");
     } finally {
       setLoading(false);
     }
   };
 
-  // Fetch when filters/page/search changes
   useEffect(() => {
-    if (groupId) {
-      fetchExpenses();
-    }
+    if (groupId) fetchExpenses();
   }, [groupId, page, search, filters]);
 
   const handleFilterChange = (e) => {
     setFilters((prev) => ({ ...prev, [e.target.name]: e.target.value }));
-    setPage(1); // reset page on filter change
+    setPage(1);
   };
 
+  const handleSearchChange = (e) => {
+    setSearch(e.target.value);
+    setPage(1);
+  };
+
+  const handlePageChange = (event, newPage) => setPage(newPage);
+
   return (
-    <div style={{ padding: "20px" }}>
-      <h2>Group Expenses</h2>
-      <Link to={`/groups/${groupId}/expenses/create`}>➕ Add New Expense</Link>
+    <div className="max-w-7xl mx-auto p-6">
+      {/* Header */}
+      <Box className="mb-8 flex flex-col md:flex-row md:justify-between items-start md:items-center gap-4">
+        <Box>
+          <Typography
+            variant="h4"
+            className="font-bold flex items-center gap-3"
+          >
+            <Users className="w-8 h-8 text-blue-600" />
+            Group Expenses
+          </Typography>
+          <Typography variant="body1" className="text-gray-600 mt-1">
+            Manage and track expenses for your group
+          </Typography>
+        </Box>
+        <Button
+          component={Link}
+          to={`/groups/${groupId}/expenses/create`}
+          variant="contained"
+          startIcon={<Plus className="w-4 h-4" />}
+          className="bg-blue-600 hover:bg-blue-700"
+        >
+          Add New Expense
+        </Button>
+      </Box>
 
-      {/* Search input */}
-      <div style={{ margin: "20px 0" }}>
-        <input
-          type="text"
-          placeholder="Search expenses..."
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            setPage(1);
-          }}
-          style={{ padding: "8px", width: "250px" }}
-        />
-      </div>
-
-      {/* Filters */}
-      <div
-        style={{
-          marginBottom: "20px",
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-          gap: "10px",
-        }}
-      >
-        <input
-          type="text"
-          name="category"
-          placeholder="Filter by category"
-          value={filters.category}
-          onChange={handleFilterChange}
-        />
-        <input
-          type="text"
-          name="paidBy"
-          placeholder="Filter by payer"
-          value={filters.paidBy}
-          onChange={handleFilterChange}
-        />
-        <input
-          type="date"
-          name="dateFrom"
-          value={filters.dateFrom}
-          onChange={handleFilterChange}
-        />
-        <input
-          type="date"
-          name="dateTo"
-          value={filters.dateTo}
-          onChange={handleFilterChange}
-        />
-        <input
-          type="number"
-          name="minAmount"
-          placeholder="Min amount"
-          value={filters.minAmount}
-          onChange={handleFilterChange}
-        />
-        <input
-          type="number"
-          name="maxAmount"
-          placeholder="Max amount"
-          value={filters.maxAmount}
-          onChange={handleFilterChange}
-        />
-        <select
-          name="settlementStatus"
-          value={filters.settlementStatus}
-          onChange={handleFilterChange}
-        >
-          <option value="">All</option>
-          <option value="settled">Settled</option>
-          <option value="pending">Pending</option>
-        </select>
-        <select
-          name="sortBy"
-          value={filters.sortBy}
-          onChange={handleFilterChange}
-        >
-          <option value="expense_date">Date</option>
-          <option value="amount">Amount</option>
-          <option value="description">Description</option>
-          <option value="created_at">Created</option>
-        </select>
-        <select
-          name="sortOrder"
-          value={filters.sortOrder}
-          onChange={handleFilterChange}
-        >
-          <option value="DESC">Descending</option>
-          <option value="ASC">Ascending</option>
-        </select>
-      </div>
+      {/* Search & Filters */}
+      <Card className="mb-6 shadow-sm">
+        <CardHeader title="Search & Filters" />
+        <CardContent>
+          <Grid container spacing={3}>
+            <Grid item xs={12} md={4}>
+              <TextField
+                fullWidth
+                placeholder="Search expenses..."
+                value={search}
+                onChange={handleSearchChange}
+                InputProps={{
+                  startAdornment: (
+                    <Search className="w-4 h-4 text-gray-400 mr-2" />
+                  ),
+                }}
+              />
+            </Grid>
+            <Grid item xs={12} md={8}>
+              <Grid container spacing={2}>
+                <Grid item xs={6} sm={3}>
+                  <TextField
+                    fullWidth
+                    label="Category"
+                    name="category"
+                    value={filters.category}
+                    onChange={handleFilterChange}
+                    size="small"
+                  />
+                </Grid>
+                <Grid item xs={6} sm={3}>
+                  <TextField
+                    fullWidth
+                    label="Paid By"
+                    name="paidBy"
+                    value={filters.paidBy}
+                    onChange={handleFilterChange}
+                    size="small"
+                  />
+                </Grid>
+                <Grid item xs={6} sm={3}>
+                  <TextField
+                    fullWidth
+                    type="date"
+                    label="From"
+                    name="dateFrom"
+                    InputLabelProps={{ shrink: true }}
+                    value={filters.dateFrom}
+                    onChange={handleFilterChange}
+                    size="small"
+                  />
+                </Grid>
+                <Grid item xs={6} sm={3}>
+                  <TextField
+                    fullWidth
+                    type="date"
+                    label="To"
+                    name="dateTo"
+                    InputLabelProps={{ shrink: true }}
+                    value={filters.dateTo}
+                    onChange={handleFilterChange}
+                    size="small"
+                  />
+                </Grid>
+              </Grid>
+            </Grid>
+          </Grid>
+        </CardContent>
+      </Card>
 
       {loading ? (
-        <p>Loading expenses...</p>
+        <Box className="flex items-center justify-center min-h-64 py-12">
+          <CircularProgress />
+          <Typography variant="body2" className="ml-3 text-gray-600">
+            Loading expenses...
+          </Typography>
+        </Box>
       ) : (
         <>
           {/* Summary */}
           {summary && (
-            <div
-              style={{
-                margin: "20px 0",
-                padding: "10px",
-                border: "1px solid #ccc",
-              }}
-            >
-              <h4>Summary</h4>
-              <p>Total Expenses: {summary.totalExpenses}</p>
-              <p>Total Amount: ${summary.totalAmount}</p>
-              <p>Unsettled Amount: ${summary.totalUnsettled}</p>
-              <p>Average Expense: ${summary.averageExpense}</p>
-            </div>
+            <Card className="mb-6 shadow-sm">
+              <CardHeader title="Summary" />
+              <CardContent>
+                <Grid container spacing={4}>
+                  <Grid item xs={6} sm={3}>
+                    <Box className="text-center">
+                      <Typography
+                        variant="h5"
+                        className="font-bold text-blue-600"
+                      >
+                        {summary.totalExpenses}
+                      </Typography>
+                      <Typography variant="body2" className="text-gray-600">
+                        Total Expenses
+                      </Typography>
+                    </Box>
+                  </Grid>
+                  <Grid item xs={6} sm={3}>
+                    <Box className="text-center">
+                      <Typography
+                        variant="h5"
+                        className="font-bold text-green-600"
+                      >
+                        ${summary.totalAmount}
+                      </Typography>
+                      <Typography variant="body2" className="text-gray-600">
+                        Total Amount
+                      </Typography>
+                    </Box>
+                  </Grid>
+                  <Grid item xs={6} sm={3}>
+                    <Box className="text-center">
+                      <Typography
+                        variant="h5"
+                        className="font-bold text-orange-600"
+                      >
+                        ${summary.totalUnsettled}
+                      </Typography>
+                      <Typography variant="body2" className="text-gray-600">
+                        Unsettled Amount
+                      </Typography>
+                    </Box>
+                  </Grid>
+                  <Grid item xs={6} sm={3}>
+                    <Box className="text-center">
+                      <Typography
+                        variant="h5"
+                        className="font-bold text-purple-600"
+                      >
+                        ${summary.averageExpense}
+                      </Typography>
+                      <Typography variant="body2" className="text-gray-600">
+                        Average Expense
+                      </Typography>
+                    </Box>
+                  </Grid>
+                </Grid>
+              </CardContent>
+            </Card>
           )}
 
-          {/* Expense list */}
-          <h4>Expense List</h4>
-          {expenses.length === 0 ? (
-            <p>No expenses found for this group.</p>
-          ) : (
-            <ul>
-              {expenses.map((exp) => (
-                <li key={exp.id} style={{ marginBottom: "12px" }}>
-                  <strong>{exp.description}</strong> — ${exp.amount} <br />
-                  Payer: {exp.payer?.name || "Unknown"}{" "}
-                  {exp.userInfo?.isUserPayer && "(You)"}
-                  <br />
-                  {exp.userInfo?.userAmountOwed > 0 && (
-                    <span>
-                      You owe ${exp.userInfo.userAmountOwed}{" "}
-                      {exp.userInfo.userIsSettled ? "(Settled)" : "(Pending)"}
-                    </span>
-                  )}
-                </li>
-              ))}
-            </ul>
+          {/* Expense List */}
+          {expenses.map((exp) => (
+            <Card key={exp.expense_id} className="mb-4 shadow-sm">
+              <CardHeader
+                title={
+                  <Box className="flex items-center justify-between">
+                    <Typography variant="h6" className="font-semibold">
+                      {exp.description}
+                    </Typography>
+                    <Typography
+                      variant="h6"
+                      className="font-bold text-green-600"
+                    >
+                      ${exp.amount}
+                    </Typography>
+                  </Box>
+                }
+                subheader={
+                  <Box className="flex flex-wrap gap-3 mt-2 items-center">
+                    <Chip
+                      icon={<Tag className="w-4 h-4" />}
+                      label={exp.category_name || "No Category"}
+                      size="small"
+                      variant="outlined"
+                    />
+                    <Chip
+                      icon={<User className="w-4 h-4" />}
+                      label={`Paid by: ${exp.payer_first_name} ${exp.payer_last_name}`}
+                      size="small"
+                      color={exp.paid_by === user.id ? "success" : "default"}
+                    />
+                    <Chip
+                      icon={<Calendar className="w-4 h-4" />}
+                      label={new Date(exp.expense_date).toLocaleDateString()}
+                      size="small"
+                    />
+                    <Chip
+                      icon={<DollarSign className="w-4 h-4" />}
+                      label={exp.is_settled ? "Settled" : "Pending"}
+                      size="small"
+                      color={exp.is_settled ? "success" : "warning"}
+                    />
+                    {exp.split_type && (
+                      <Chip
+                        label={`Split: ${exp.split_type}`}
+                        size="small"
+                        variant="outlined"
+                      />
+                    )}
+                  </Box>
+                }
+              />
+              <CardContent>
+                {exp.notes && (
+                  <Typography variant="body2" className="text-gray-600 mb-2">
+                    Notes: {exp.notes}
+                  </Typography>
+                )}
+                {exp.category_description && (
+                  <Typography variant="body2" className="text-gray-500">
+                    Category Details: {exp.category_description}
+                  </Typography>
+                )}
+              </CardContent>
+            </Card>
+          ))}
+
+          {/* Pagination */}
+          {pagination.totalPages > 1 && (
+            <Box className="flex justify-center mt-6">
+              <Pagination
+                count={pagination.totalPages}
+                page={pagination.currentPage}
+                onChange={handlePageChange}
+                color="primary"
+              />
+            </Box>
           )}
-
-          {/* Pagination controls */}
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "center",
-              gap: "12px",
-              marginTop: "20px",
-            }}
-          >
-            <button
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={!pagination.hasPrevPage}
-              style={{
-                padding: "6px 12px",
-                backgroundColor: pagination.hasPrevPage ? "#007bff" : "#ccc",
-                color: "white",
-                border: "none",
-                cursor: pagination.hasPrevPage ? "pointer" : "not-allowed",
-              }}
-            >
-              Prev
-            </button>
-
-            <span style={{ alignSelf: "center" }}>
-              Page {pagination.currentPage} of {pagination.totalPages}
-            </span>
-
-            <button
-              onClick={() =>
-                setPage((p) =>
-                  pagination.hasNextPage
-                    ? Math.min(pagination.totalPages, p + 1)
-                    : p
-                )
-              }
-              disabled={!pagination.hasNextPage}
-              style={{
-                padding: "6px 12px",
-                backgroundColor: pagination.hasNextPage ? "#007bff" : "#ccc",
-                color: "white",
-                border: "none",
-                cursor: pagination.hasNextPage ? "pointer" : "not-allowed",
-              }}
-            >
-              Next
-            </button>
-          </div>
         </>
       )}
     </div>

@@ -1,7 +1,47 @@
+"use client";
+
 // DetailedDebts.jsx
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import DebtChart from "./DebtChart";
 import { useNavigate, useParams } from "react-router-dom";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  Typography,
+  Button,
+  Box,
+  TextField,
+  Checkbox,
+  FormControlLabel,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  Chip,
+  CircularProgress,
+  Alert,
+  Grid,
+  Container,
+  Paper,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+} from "@mui/material";
+import {
+  ArrowLeft,
+  Search,
+  RefreshCw,
+  Handshake,
+  AlertTriangle,
+  TrendingUp,
+  TrendingDown,
+  Calendar,
+  DollarSign,
+  Users,
+  ChevronDown,
+} from "lucide-react";
+import { toast } from "react-hot-toast";
 
 const API_BASE_URL = "http://localhost:3005/api";
 
@@ -45,8 +85,10 @@ export default function DetailedDebts() {
       if (!json.success) throw new Error(json.message || "Failed to load");
       setData(json.data);
     } catch (err) {
-      setError(err.message || "Unknown error");
+      const errorMsg = err.message || "Unknown error";
+      setError(errorMsg);
       setData(null);
+      toast.error(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -62,31 +104,74 @@ export default function DetailedDebts() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groupId]);
 
-  if (loading) return <div>Loading detailed debts...</div>;
-  if (error)
+  if (loading) {
     return (
-      <div style={{ padding: 16 }}>
-        <div style={{ color: "red", marginBottom: 8 }}>{error}</div>
-        <div>
-          <button onClick={() => navigate("/debt")} style={{ marginRight: 8 }}>
-            Back
-          </button>
-          <button onClick={() => fetchDetailed()}>Retry</button>
-        </div>
-      </div>
+      <Container maxWidth="xl" className="py-8">
+        <Box className="flex items-center justify-center h-64 space-x-3">
+          <CircularProgress size={28} />
+          <Typography variant="body2" className="text-gray-500">
+            Loading detailed debts...
+          </Typography>
+        </Box>
+      </Container>
     );
-  if (!data)
+  }
+
+  if (error) {
     return (
-      <div style={{ padding: 16 }}>
-        <div>No data to show.</div>
-        <div style={{ marginTop: 8 }}>
-          <button onClick={() => navigate("/debt")} style={{ marginRight: 8 }}>
+      <Container maxWidth="xl" className="py-8">
+        <Alert severity="error" className="rounded-lg mb-4">
+          {error}
+        </Alert>
+        <Box className="flex space-x-2">
+          <Button
+            variant="outlined"
+            startIcon={<ArrowLeft className="w-4 h-4" />}
+            onClick={() => navigate("/debt")}
+            sx={{ textTransform: "none" }}
+          >
             Back
-          </button>
-          <button onClick={() => fetchDetailed()}>Refresh</button>
-        </div>
-      </div>
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={<RefreshCw className="w-4 h-4" />}
+            onClick={() => fetchDetailed()}
+            sx={{ textTransform: "none" }}
+          >
+            Retry
+          </Button>
+        </Box>
+      </Container>
     );
+  }
+
+  if (!data) {
+    return (
+      <Container maxWidth="xl" className="py-8">
+        <Typography variant="body2" className="text-gray-500 text-center py-8">
+          No data to show.
+        </Typography>
+        <Box className="flex justify-center space-x-2">
+          <Button
+            variant="outlined"
+            startIcon={<ArrowLeft className="w-4 h-4" />}
+            onClick={() => navigate("/debt")}
+            sx={{ textTransform: "none" }}
+          >
+            Back
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={<RefreshCw className="w-4 h-4" />}
+            onClick={() => fetchDetailed()}
+            sx={{ textTransform: "none" }}
+          >
+            Refresh
+          </Button>
+        </Box>
+      </Container>
+    );
+  }
 
   const rawNetBalances = Object.values(data.netBalances || {});
   const rawPeopleOweUser = Object.values(data.peopleWhoOweUser || {});
@@ -108,10 +193,13 @@ export default function DetailedDebts() {
   const totalAmountForEntry = (entry) =>
     entry?.totalAmount ??
     (Array.isArray(entry?.expenses)
-      ? entry.expenses.reduce((s, e) => s + (parseFloat(e.debtAmount) || 0), 0)
+      ? entry.expenses.reduce(
+          (s, e) => s + (Number.parseFloat(e.debtAmount) || 0),
+          0
+        )
       : 0);
 
-  const minAmountNum = parseFloat(minAmount);
+  const minAmountNum = Number.parseFloat(minAmount);
   const hasMinAmount = !Number.isNaN(minAmountNum) && minAmount !== "";
   const q = debouncedSearch;
 
@@ -132,8 +220,8 @@ export default function DetailedDebts() {
   const filterPeopleList = (arr) =>
     arr.filter((entry) => {
       let netPos = "settled";
-      const theyOwe = parseFloat(entry.theyOwe || 0);
-      const userOwes = parseFloat(entry.userOwes || 0);
+      const theyOwe = Number.parseFloat(entry.theyOwe || 0);
+      const userOwes = Number.parseFloat(entry.userOwes || 0);
       const netAmount = theyOwe - userOwes;
       if (netAmount > 0) netPos = "user_is_owed";
       else if (netAmount < 0) netPos = "user_owes";
@@ -159,330 +247,546 @@ export default function DetailedDebts() {
   const peopleUserOwes = filterPeopleList(rawPeopleUserOwes);
 
   return (
-    <div style={{ padding: 16 }}>
+    <Container maxWidth="xl" className="py-8">
       {/* Header */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          gap: 12,
-          flexWrap: "wrap",
-        }}
-      >
-        <h2 style={{ margin: 0 }}>Detailed debts — group {groupId}</h2>
-        <div
-          style={{
-            display: "flex",
-            gap: 8,
-            alignItems: "center",
-            flexWrap: "wrap",
-          }}
+      <Box className="mb-6">
+        <Button
+          startIcon={<ArrowLeft className="w-4 h-4" />}
+          onClick={() => navigate("/debt")}
+          className="mb-4 text-gray-600"
+          sx={{ textTransform: "none" }}
         >
-          <input
-            aria-label="Search debts"
-            placeholder="Search by person, group or expense..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            style={{
-              padding: "8px 10px",
-              borderRadius: 6,
-              border: "1px solid #ccc",
-              minWidth: 260,
-            }}
-          />
-          {searchTerm && (
-            <button
-              onClick={() => setSearchTerm("")}
-              style={{ padding: "8px 10px", borderRadius: 6 }}
-            >
-              Clear
-            </button>
-          )}
-          <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <input
-              type="checkbox"
-              checked={overdueOnly}
-              onChange={(e) => setOverdueOnly(e.target.checked)}
-            />
-            Overdue only
-          </label>
-          <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            Min amount
-            <input
-              type="number"
-              value={minAmount}
-              onChange={(e) => setMinAmount(e.target.value)}
-              placeholder="e.g. 10"
-              style={{
-                width: 90,
-                padding: "6px 8px",
-                borderRadius: 6,
-                border: "1px solid #ccc",
-              }}
-            />
-          </label>
-          <label>
-            Role:
-            <select
-              value={roleFilter}
-              onChange={(e) => setRoleFilter(e.target.value)}
-              style={{ marginLeft: 6, padding: "6px 8px", borderRadius: 6 }}
-            >
-              <option value="all">All</option>
-              <option value="user_owes">You owe</option>
-              <option value="user_is_owed">You're owed</option>
-            </select>
-          </label>
-          <button
-            onClick={() => navigate("/debt")}
-            style={{ padding: "8px 10px", borderRadius: 6 }}
-          >
-            Back
-          </button>
-          <button
-            onClick={() => fetchDetailed()}
-            style={{ padding: "8px 10px", borderRadius: 6 }}
-          >
-            Refresh
-          </button>
-          {/* ✅ Quick "Settle group" button */}
-          <button
-            onClick={() => navigate(`/settlements/create?groupId=${groupId}`)}
-            style={{
-              padding: "8px 10px",
-              borderRadius: 6,
-              background: "#28a745",
-              color: "white",
-            }}
-          >
-            Settle Group Debts
-          </button>
-        </div>
-      </div>
+          Back to Debt Summary
+        </Button>
 
-      {/* Layout */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 350px",
-          gap: 16,
-          marginTop: 12,
-        }}
-      >
-        {/* LEFT SIDE */}
-        <div>
-          <h3>Net balances (per person / group)</h3>
-          {netBalancesArray.length === 0 ? (
-            <div style={{ color: "#666" }}>No balances found.</div>
-          ) : (
-            netBalancesArray.map((b, idx) => (
-              <div
-                key={idx}
-                style={{
-                  padding: 10,
-                  border: "1px solid #eee",
-                  marginBottom: 8,
-                  borderRadius: 6,
+        <Typography variant="h4" className="font-bold text-gray-900 mb-2">
+          Detailed Debts - Group {groupId}
+        </Typography>
+        <Typography variant="body2" className="text-gray-600">
+          Comprehensive view of all debts and balances in this group
+        </Typography>
+      </Box>
+
+      {/* Filters */}
+      <Card className="rounded-xl shadow-sm mb-6">
+        <CardContent className="p-4">
+          <Grid container spacing={3} alignItems="center">
+            <Grid item xs={12} md={4}>
+              <TextField
+                fullWidth
+                placeholder="Search by person, group or expense..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                InputProps={{
+                  startAdornment: (
+                    <Search className="w-4 h-4 mr-2 text-gray-500" />
+                  ),
                 }}
-              >
-                <div style={{ fontWeight: 700 }}>
-                  {b.person.name} — {b.group.name}
-                </div>
-                <div style={{ marginTop: 6 }}>
-                  <strong>Net:</strong> ${b.netAmount.toFixed(2)} (
-                  {b.netPosition})
-                </div>
-                <div style={{ marginTop: 6 }}>
-                  <div>
-                    <strong>You owe:</strong> ${b.userOwes.toFixed(2)}
-                  </div>
-                  <div>
-                    <strong>They owe:</strong> ${b.theyOwe.toFixed(2)}
-                  </div>
-                </div>
-                {overdueMap[`${b.person.id}_${b.group.id}`] && (
-                  <div style={{ marginTop: 6, color: "crimson" }}>
-                    Has overdue expenses
-                  </div>
-                )}
-                <div style={{ marginTop: 8 }}>
-                  <button
-                    onClick={() =>
-                      navigate(
-                        `/settlements/create?groupId=${groupId}&otherUserId=${b.person.id}`
-                      )
-                    }
-                    style={{
-                      padding: "6px 10px",
-                      borderRadius: 6,
-                      background: "#007bff",
-                      color: "white",
-                    }}
+                variant="outlined"
+                size="small"
+              />
+            </Grid>
+
+            <Grid item xs={12} md={2}>
+              <TextField
+                fullWidth
+                label="Min Amount"
+                type="number"
+                value={minAmount}
+                onChange={(e) => setMinAmount(e.target.value)}
+                placeholder="0.00"
+                variant="outlined"
+                size="small"
+                InputProps={{
+                  startAdornment: (
+                    <DollarSign className="w-4 h-4 mr-1 text-gray-500" />
+                  ),
+                }}
+              />
+            </Grid>
+
+            <Grid item xs={12} md={2}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Role Filter</InputLabel>
+                <Select
+                  value={roleFilter}
+                  onChange={(e) => setRoleFilter(e.target.value)}
+                  label="Role Filter"
+                >
+                  <MenuItem value="all">All</MenuItem>
+                  <MenuItem value="user_owes">You owe</MenuItem>
+                  <MenuItem value="user_is_owed">You're owed</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+
+            <Grid item xs={12} md={2}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={overdueOnly}
+                    onChange={(e) => setOverdueOnly(e.target.checked)}
+                    color="warning"
+                  />
+                }
+                label="Overdue only"
+              />
+            </Grid>
+
+            <Grid item xs={12} md={2}>
+              <Box className="flex space-x-2">
+                {searchTerm && (
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    onClick={() => setSearchTerm("")}
+                    sx={{ textTransform: "none" }}
                   >
-                    Settle with {b.person.name}
-                  </button>
-                </div>
-              </div>
-            ))
-          )}
+                    Clear
+                  </Button>
+                )}
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={<RefreshCw className="w-4 h-4" />}
+                  onClick={() => fetchDetailed()}
+                  sx={{ textTransform: "none" }}
+                >
+                  Refresh
+                </Button>
+                <Button
+                  variant="contained"
+                  size="small"
+                  startIcon={<Handshake className="w-4 h-4" />}
+                  onClick={() =>
+                    navigate(`/settlements/create?groupId=${groupId}`)
+                  }
+                  className="bg-green-600 hover:bg-green-700"
+                  sx={{
+                    textTransform: "none",
+                    backgroundColor: "rgb(34, 197, 94)",
+                    "&:hover": { backgroundColor: "rgb(21, 128, 61)" },
+                  }}
+                >
+                  Settle Group
+                </Button>
+              </Box>
+            </Grid>
+          </Grid>
+        </CardContent>
+      </Card>
+
+      <Grid container spacing={4}>
+        {/* Left Column - Detailed Lists */}
+        <Grid item xs={12} lg={8}>
+          {/* Net Balances */}
+          <Card className="rounded-xl shadow-sm mb-6">
+            <CardHeader className="pb-4">
+              <Box className="flex items-center space-x-2">
+                <Users className="w-5 h-5 text-gray-600" />
+                <Typography variant="h6" className="font-semibold">
+                  Net Balances ({netBalancesArray.length})
+                </Typography>
+              </Box>
+            </CardHeader>
+
+            <CardContent>
+              {netBalancesArray.length === 0 ? (
+                <Typography
+                  variant="body2"
+                  className="text-gray-500 text-center py-8"
+                >
+                  No balances found with current filters.
+                </Typography>
+              ) : (
+                <Box className="space-y-3">
+                  {netBalancesArray.map((b, idx) => (
+                    <Card key={idx} variant="outlined" className="rounded-lg">
+                      <CardContent className="p-4">
+                        <Box className="flex items-center justify-between">
+                          <Box className="flex-1">
+                            <Typography
+                              variant="h6"
+                              className="font-semibold mb-1"
+                            >
+                              {b.person.name} — {b.group.name}
+                            </Typography>
+
+                            <Box className="grid grid-cols-2 gap-4 mb-3">
+                              <Box>
+                                <Typography
+                                  variant="body2"
+                                  className="text-gray-600"
+                                >
+                                  You owe:{" "}
+                                  <span className="font-medium text-red-600">
+                                    ${b.userOwes.toFixed(2)}
+                                  </span>
+                                </Typography>
+                              </Box>
+                              <Box>
+                                <Typography
+                                  variant="body2"
+                                  className="text-gray-600"
+                                >
+                                  They owe:{" "}
+                                  <span className="font-medium text-green-600">
+                                    ${b.theyOwe.toFixed(2)}
+                                  </span>
+                                </Typography>
+                              </Box>
+                            </Box>
+
+                            {overdueMap[`${b.person.id}_${b.group.id}`] && (
+                              <Chip
+                                label="Has overdue expenses"
+                                size="small"
+                                color="error"
+                                variant="outlined"
+                                icon={<AlertTriangle className="w-3 h-3" />}
+                              />
+                            )}
+                          </Box>
+
+                          <Box className="text-right ml-4">
+                            <Typography
+                              variant="h6"
+                              className={`font-bold mb-1 ${
+                                b.netAmount >= 0
+                                  ? "text-green-600"
+                                  : "text-red-600"
+                              }`}
+                            >
+                              ${Math.abs(b.netAmount).toFixed(2)}
+                            </Typography>
+                            <Chip
+                              label={
+                                b.netPosition === "user_is_owed"
+                                  ? "You're owed"
+                                  : "You owe"
+                              }
+                              size="small"
+                              color={
+                                b.netPosition === "user_is_owed"
+                                  ? "success"
+                                  : "error"
+                              }
+                              variant="outlined"
+                              className="mb-3"
+                            />
+
+                            <Button
+                              size="small"
+                              variant="contained"
+                              startIcon={<Handshake className="w-4 h-4" />}
+                              onClick={() =>
+                                navigate(
+                                  `/settlements/create?groupId=${groupId}&otherUserId=${b.person.id}`
+                                )
+                              }
+                              className="bg-blue-600 hover:bg-blue-700"
+                              sx={{
+                                textTransform: "none",
+                                backgroundColor: "rgb(37, 99, 235)",
+                                "&:hover": {
+                                  backgroundColor: "rgb(29, 78, 216)",
+                                },
+                              }}
+                            >
+                              Settle with {b.person.name}
+                            </Button>
+                          </Box>
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </Box>
+              )}
+            </CardContent>
+          </Card>
 
           {/* People who owe user */}
-          <h3 style={{ marginTop: 12 }}>People who owe you</h3>
-          {peopleOweUser.length === 0 ? (
-            <div style={{ color: "#666" }}>None</div>
-          ) : (
-            peopleOweUser.map((p, idx) => (
-              <div
-                key={idx}
-                style={{
-                  border: "1px solid #f0fff0",
-                  padding: 8,
-                  borderRadius: 6,
-                  marginBottom: 8,
-                }}
-              >
-                <div style={{ fontWeight: 700 }}>
-                  {p.person.name} — {p.group.name}
-                </div>
-                <div>
-                  Total owed: ${totalAmountForEntry(p).toFixed(2)} • Expenses:{" "}
-                  {p.expenseCount}
-                </div>
-                <div style={{ marginTop: 6 }}>
-                  {p.expenses.map((e) => (
-                    <div
-                      key={e.expenseId}
-                      style={{
-                        borderTop: "1px dashed #eee",
-                        paddingTop: 6,
-                        marginTop: 6,
-                      }}
+          <Card className="rounded-xl shadow-sm mb-6">
+            <CardHeader className="pb-4">
+              <Box className="flex items-center space-x-2">
+                <TrendingUp className="w-5 h-5 text-green-600" />
+                <Typography variant="h6" className="font-semibold">
+                  People Who Owe You ({peopleOweUser.length})
+                </Typography>
+              </Box>
+            </CardHeader>
+
+            <CardContent>
+              {peopleOweUser.length === 0 ? (
+                <Typography
+                  variant="body2"
+                  className="text-gray-500 text-center py-8"
+                >
+                  No one owes you money with current filters.
+                </Typography>
+              ) : (
+                <Box className="space-y-4">
+                  {peopleOweUser.map((p, idx) => (
+                    <Accordion
+                      key={idx}
+                      className="rounded-lg border border-green-200"
                     >
-                      <div style={{ fontWeight: 600 }}>
-                        {e.description} — ${e.debtAmount.toFixed(2)}
-                      </div>
-                      <div style={{ fontSize: 12, color: "#666" }}>
-                        Expense date:{" "}
-                        {e.expenseDate ? e.expenseDate.split("T")[0] : "-"} —{" "}
-                        {e.isOverdue ? "Overdue" : "OK"}
-                      </div>
-                    </div>
+                      <AccordionSummary
+                        expandIcon={<ChevronDown className="w-4 h-4" />}
+                      >
+                        <Box className="flex items-center justify-between w-full mr-4">
+                          <Box>
+                            <Typography variant="h6" className="font-semibold">
+                              {p.person.name} — {p.group.name}
+                            </Typography>
+                            <Typography
+                              variant="body2"
+                              className="text-gray-600"
+                            >
+                              Total owed: ${totalAmountForEntry(p).toFixed(2)} •{" "}
+                              {p.expenseCount} expenses
+                            </Typography>
+                          </Box>
+                          <Button
+                            size="small"
+                            variant="contained"
+                            startIcon={<Handshake className="w-4 h-4" />}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(
+                                `/settlements/create?groupId=${groupId}&otherUserId=${p.person.id}`
+                              );
+                            }}
+                            className="bg-green-600 hover:bg-green-700"
+                            sx={{
+                              textTransform: "none",
+                              backgroundColor: "rgb(34, 197, 94)",
+                              "&:hover": {
+                                backgroundColor: "rgb(21, 128, 61)",
+                              },
+                            }}
+                          >
+                            Settle
+                          </Button>
+                        </Box>
+                      </AccordionSummary>
+                      <AccordionDetails>
+                        <Box className="space-y-3">
+                          {p.expenses.map((e) => (
+                            <Paper
+                              key={e.expenseId}
+                              variant="outlined"
+                              className="p-3 rounded-lg"
+                            >
+                              <Box className="flex items-center justify-between">
+                                <Box>
+                                  <Typography
+                                    variant="subtitle2"
+                                    className="font-semibold"
+                                  >
+                                    {e.description}
+                                  </Typography>
+                                  <Box className="flex items-center space-x-2 text-sm text-gray-600 mt-1">
+                                    <Calendar className="w-4 h-4" />
+                                    <span>
+                                      {e.expenseDate
+                                        ? e.expenseDate.split("T")[0]
+                                        : "-"}
+                                    </span>
+                                    {e.isOverdue && (
+                                      <Chip
+                                        label="Overdue"
+                                        size="small"
+                                        color="error"
+                                        variant="outlined"
+                                      />
+                                    )}
+                                  </Box>
+                                </Box>
+                                <Typography
+                                  variant="h6"
+                                  className="font-bold text-green-600"
+                                >
+                                  ${e.debtAmount.toFixed(2)}
+                                </Typography>
+                              </Box>
+                            </Paper>
+                          ))}
+                        </Box>
+                      </AccordionDetails>
+                    </Accordion>
                   ))}
-                </div>
-                <div style={{ marginTop: 8 }}>
-                  <button
-                    onClick={() =>
-                      navigate(
-                        `/settlements/create?groupId=${groupId}&otherUserId=${p.person.id}`
-                      )
-                    }
-                    style={{
-                      padding: "6px 10px",
-                      borderRadius: 6,
-                      background: "#28a745",
-                      color: "white",
-                    }}
-                  >
-                    Settle with {p.person.name}
-                  </button>
-                </div>
-              </div>
-            ))
-          )}
+                </Box>
+              )}
+            </CardContent>
+          </Card>
 
           {/* People user owes */}
-          <h3 style={{ marginTop: 12 }}>People you owe</h3>
-          {peopleUserOwes.length === 0 ? (
-            <div style={{ color: "#666" }}>None</div>
-          ) : (
-            peopleUserOwes.map((p, idx) => (
-              <div
-                key={idx}
-                style={{
-                  border: "1px solid #fff0f0",
-                  padding: 8,
-                  borderRadius: 6,
-                  marginBottom: 8,
-                }}
-              >
-                <div style={{ fontWeight: 700 }}>
-                  {p.person.name} — {p.group.name}
-                </div>
-                <div>
-                  Total you owe: ${totalAmountForEntry(p).toFixed(2)} •
-                  Expenses: {p.expenseCount}
-                </div>
-                <div style={{ marginTop: 6 }}>
-                  {p.expenses.map((e) => (
-                    <div
-                      key={e.expenseId}
-                      style={{
-                        borderTop: "1px dashed #eee",
-                        paddingTop: 6,
-                        marginTop: 6,
-                      }}
+          <Card className="rounded-xl shadow-sm">
+            <CardHeader className="pb-4">
+              <Box className="flex items-center space-x-2">
+                <TrendingDown className="w-5 h-5 text-red-600" />
+                <Typography variant="h6" className="font-semibold">
+                  People You Owe ({peopleUserOwes.length})
+                </Typography>
+              </Box>
+            </CardHeader>
+
+            <CardContent>
+              {peopleUserOwes.length === 0 ? (
+                <Typography
+                  variant="body2"
+                  className="text-gray-500 text-center py-8"
+                >
+                  You don't owe anyone money with current filters.
+                </Typography>
+              ) : (
+                <Box className="space-y-4">
+                  {peopleUserOwes.map((p, idx) => (
+                    <Accordion
+                      key={idx}
+                      className="rounded-lg border border-red-200"
                     >
-                      <div style={{ fontWeight: 600 }}>
-                        {e.description} — ${e.debtAmount.toFixed(2)}
-                      </div>
-                      <div style={{ fontSize: 12, color: "#666" }}>
-                        Expense date:{" "}
-                        {e.expenseDate ? e.expenseDate.split("T")[0] : "-"} —{" "}
-                        {e.isOverdue ? "Overdue" : "OK"}
-                      </div>
-                    </div>
+                      <AccordionSummary
+                        expandIcon={<ChevronDown className="w-4 h-4" />}
+                      >
+                        <Box className="flex items-center justify-between w-full mr-4">
+                          <Box>
+                            <Typography variant="h6" className="font-semibold">
+                              {p.person.name} — {p.group.name}
+                            </Typography>
+                            <Typography
+                              variant="body2"
+                              className="text-gray-600"
+                            >
+                              Total you owe: $
+                              {totalAmountForEntry(p).toFixed(2)} •{" "}
+                              {p.expenseCount} expenses
+                            </Typography>
+                          </Box>
+                          <Button
+                            size="small"
+                            variant="contained"
+                            startIcon={<DollarSign className="w-4 h-4" />}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(
+                                `/settlements/create?groupId=${groupId}&otherUserId=${p.person.id}`
+                              );
+                            }}
+                            className="bg-red-600 hover:bg-red-700"
+                            sx={{
+                              textTransform: "none",
+                              backgroundColor: "rgb(239, 68, 68)",
+                              "&:hover": {
+                                backgroundColor: "rgb(220, 38, 38)",
+                              },
+                            }}
+                          >
+                            Pay {p.person.name}
+                          </Button>
+                        </Box>
+                      </AccordionSummary>
+                      <AccordionDetails>
+                        <Box className="space-y-3">
+                          {p.expenses.map((e) => (
+                            <Paper
+                              key={e.expenseId}
+                              variant="outlined"
+                              className="p-3 rounded-lg"
+                            >
+                              <Box className="flex items-center justify-between">
+                                <Box>
+                                  <Typography
+                                    variant="subtitle2"
+                                    className="font-semibold"
+                                  >
+                                    {e.description}
+                                  </Typography>
+                                  <Box className="flex items-center space-x-2 text-sm text-gray-600 mt-1">
+                                    <Calendar className="w-4 h-4" />
+                                    <span>
+                                      {e.expenseDate
+                                        ? e.expenseDate.split("T")[0]
+                                        : "-"}
+                                    </span>
+                                    {e.isOverdue && (
+                                      <Chip
+                                        label="Overdue"
+                                        size="small"
+                                        color="error"
+                                        variant="outlined"
+                                      />
+                                    )}
+                                  </Box>
+                                </Box>
+                                <Typography
+                                  variant="h6"
+                                  className="font-bold text-red-600"
+                                >
+                                  ${e.debtAmount.toFixed(2)}
+                                </Typography>
+                              </Box>
+                            </Paper>
+                          ))}
+                        </Box>
+                      </AccordionDetails>
+                    </Accordion>
                   ))}
-                </div>
-                <div style={{ marginTop: 8 }}>
-                  <button
-                    onClick={() =>
-                      navigate(
-                        `/settlements/create?groupId=${groupId}&otherUserId=${p.person.id}`
-                      )
-                    }
-                    style={{
-                      padding: "6px 10px",
-                      borderRadius: 6,
-                      background: "#dc3545",
-                      color: "white",
-                    }}
-                  >
-                    Pay {p.person.name}
-                  </button>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
+                </Box>
+              )}
+            </CardContent>
+          </Card>
+        </Grid>
 
-        {/* RIGHT SIDE (Sidebar) */}
-        <aside>
-          <h4>Net balances chart</h4>
-          <DebtChart
-            netBalances={netBalancesArray.map((b) => ({
-              key: `${b.person.id}_${b.group.id}`,
-              label: `${b.person.name} (${b.group.name})`,
-              amount: b.netAmount,
-            }))}
-          />
+        {/* Right Column - Chart & Suggestions */}
+        <Grid item xs={12} lg={4}>
+          {/* Chart */}
+          <Box className="mb-6">
+            <DebtChart
+              netBalances={netBalancesArray.map((b) => ({
+                key: `${b.person.id}_${b.group.id}`,
+                label: `${b.person.name} (${b.group.name})`,
+                amount: b.netAmount,
+              }))}
+            />
+          </Box>
 
-          <div style={{ marginTop: 16 }}>
-            <h4>Settlement suggestions</h4>
-            {data.settlementSuggestion?.length ? (
-              <ul>
-                {data.settlementSuggestion.map((s, i) => (
-                  <li key={i} style={{ fontSize: 13 }}>
-                    {s}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <div>No suggestions</div>
-            )}
-          </div>
-        </aside>
-      </div>
-    </div>
+          {/* Settlement Suggestions */}
+          <Card className="rounded-xl shadow-sm">
+            <CardHeader className="pb-4">
+              <Typography variant="h6" className="font-semibold">
+                Settlement Suggestions
+              </Typography>
+            </CardHeader>
+
+            <CardContent>
+              {data.settlementSuggestion?.length ? (
+                <Box className="space-y-2">
+                  {data.settlementSuggestion.map((s, i) => (
+                    <Paper
+                      key={i}
+                      variant="outlined"
+                      className="p-3 rounded-lg"
+                    >
+                      <Typography variant="body2" className="text-gray-700">
+                        {s}
+                      </Typography>
+                    </Paper>
+                  ))}
+                </Box>
+              ) : (
+                <Typography
+                  variant="body2"
+                  className="text-gray-500 text-center py-8"
+                >
+                  No settlement suggestions available
+                </Typography>
+              )}
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+    </Container>
   );
 }

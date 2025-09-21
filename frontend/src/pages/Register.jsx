@@ -1,5 +1,22 @@
-import React, { useState } from "react";
+"use client";
+
+import { useState } from "react";
 import { useAuth } from "../context/AuthContext";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  TextField,
+  Button,
+  Typography,
+  Box,
+  Alert,
+  CircularProgress,
+  Divider,
+  Grid,
+} from "@mui/material";
+import { UserPlus, Mail, Lock, User, Phone, ImageIcon } from "lucide-react";
+import toast from "react-hot-toast";
 
 const Register = ({ onSwitchToLogin, onRegistrationSuccess }) => {
   const [formData, setFormData] = useState({
@@ -111,6 +128,7 @@ const Register = ({ onSwitchToLogin, onRegistrationSuccess }) => {
 
       if (result.success) {
         console.log("Registration successful:", result.user);
+        toast.success("Account created successfully!");
         if (onRegistrationSuccess) {
           onRegistrationSuccess(result.user, result.message);
         }
@@ -125,206 +143,188 @@ const Register = ({ onSwitchToLogin, onRegistrationSuccess }) => {
         } else {
           setErrors({ submit: result.error });
         }
+        toast.error(result.error || "Registration failed");
       }
     } catch (error) {
-      setErrors({ submit: "An unexpected error occurred", error });
+      setErrors({ submit: "An unexpected error occurred" });
+      toast.error("An unexpected error occurred");
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <div>
-      <h2>Create Account</h2>
-
-      <div>
-        <div style={{ marginBottom: "15px" }}>
-          <label htmlFor="firstName">First Name *:</label>
-          <input
-            type="text"
-            id="firstName"
-            name="firstName"
-            value={formData.firstName}
-            onChange={handleInputChange}
-            placeholder="Enter your first name"
-            disabled={isSubmitting || loading}
-            style={{
-              display: "block",
-              marginTop: "5px",
-              padding: "8px",
-              width: "300px",
-            }}
-          />
-          {errors.firstName && (
-            <div style={{ color: "red", fontSize: "14px", marginTop: "3px" }}>
-              {errors.firstName}
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+      <Card className="w-full max-w-2xl shadow-lg">
+        <CardHeader className="text-center pb-4">
+          <Box className="flex justify-center mb-4">
+            <div className="w-12 h-12 bg-green-600 rounded-full flex items-center justify-center">
+              <UserPlus className="w-6 h-6 text-white" />
             </div>
-          )}
-        </div>
+          </Box>
+          <Typography variant="h4" className="font-bold">
+            Create Account
+          </Typography>
+          <Typography variant="body2" className="text-gray-600 mt-2">
+            Join us to start managing your expenses
+          </Typography>
+        </CardHeader>
 
-        <div style={{ marginBottom: "15px" }}>
-          <label htmlFor="lastName">Last Name *:</label>
-          <input
-            type="text"
-            id="lastName"
-            name="lastName"
-            value={formData.lastName}
-            onChange={handleInputChange}
-            placeholder="Enter your last name"
-            disabled={isSubmitting || loading}
-            style={{
-              display: "block",
-              marginTop: "5px",
-              padding: "8px",
-              width: "300px",
-            }}
-          />
-          {errors.lastName && (
-            <div style={{ color: "red", fontSize: "14px", marginTop: "3px" }}>
-              {errors.lastName}
-            </div>
-          )}
-        </div>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  name="firstName"
+                  label="First Name"
+                  value={formData.firstName}
+                  onChange={handleInputChange}
+                  placeholder="Enter your first name"
+                  disabled={isSubmitting || loading}
+                  error={!!errors.firstName}
+                  helperText={errors.firstName}
+                  InputProps={{
+                    startAdornment: (
+                      <User className="w-4 h-4 text-gray-400 mr-2" />
+                    ),
+                  }}
+                  required
+                />
+              </Grid>
 
-        <div style={{ marginBottom: "15px" }}>
-          <label htmlFor="email">Email *:</label>
-          <input
-            type="email"
-            id="email"
-            name="email"
-            value={formData.email}
-            onChange={handleInputChange}
-            placeholder="Enter your email"
-            disabled={isSubmitting || loading}
-            style={{
-              display: "block",
-              marginTop: "5px",
-              padding: "8px",
-              width: "300px",
-            }}
-          />
-          {errors.email && (
-            <div style={{ color: "red", fontSize: "14px", marginTop: "3px" }}>
-              {errors.email}
-            </div>
-          )}
-        </div>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  name="lastName"
+                  label="Last Name"
+                  value={formData.lastName}
+                  onChange={handleInputChange}
+                  placeholder="Enter your last name"
+                  disabled={isSubmitting || loading}
+                  error={!!errors.lastName}
+                  helperText={errors.lastName}
+                  InputProps={{
+                    startAdornment: (
+                      <User className="w-4 h-4 text-gray-400 mr-2" />
+                    ),
+                  }}
+                  required
+                />
+              </Grid>
+            </Grid>
 
-        <div style={{ marginBottom: "15px" }}>
-          <label htmlFor="password">Password *:</label>
-          <input
-            type="password"
-            id="password"
-            name="password"
-            value={formData.password}
-            onChange={handleInputChange}
-            placeholder="Enter your password"
-            disabled={isSubmitting || loading}
-            style={{
-              display: "block",
-              marginTop: "5px",
-              padding: "8px",
-              width: "300px",
-            }}
-          />
-          <div style={{ fontSize: "12px", color: "#666", marginTop: "3px" }}>
-            Password must be at least 8 characters with uppercase, lowercase,
-            and numbers
-          </div>
-          {errors.password && (
-            <div style={{ color: "red", fontSize: "14px", marginTop: "3px" }}>
-              {errors.password}
-            </div>
-          )}
-        </div>
+            <TextField
+              fullWidth
+              type="email"
+              name="email"
+              label="Email Address"
+              value={formData.email}
+              onChange={handleInputChange}
+              placeholder="Enter your email"
+              disabled={isSubmitting || loading}
+              error={!!errors.email}
+              helperText={errors.email}
+              InputProps={{
+                startAdornment: <Mail className="w-4 h-4 text-gray-400 mr-2" />,
+              }}
+              required
+            />
 
-        <div style={{ marginBottom: "15px" }}>
-          <label htmlFor="phone">Phone (optional):</label>
-          <input
-            type="tel"
-            id="phone"
-            name="phone"
-            value={formData.phone}
-            onChange={handleInputChange}
-            placeholder="Enter your phone number"
-            disabled={isSubmitting || loading}
-            style={{
-              display: "block",
-              marginTop: "5px",
-              padding: "8px",
-              width: "300px",
-            }}
-          />
-          {errors.phone && (
-            <div style={{ color: "red", fontSize: "14px", marginTop: "3px" }}>
-              {errors.phone}
-            </div>
-          )}
-        </div>
+            <TextField
+              fullWidth
+              type="password"
+              name="password"
+              label="Password"
+              value={formData.password}
+              onChange={handleInputChange}
+              placeholder="Enter your password"
+              disabled={isSubmitting || loading}
+              error={!!errors.password}
+              helperText={
+                errors.password ||
+                "Password must be at least 8 characters with uppercase, lowercase, and numbers"
+              }
+              InputProps={{
+                startAdornment: <Lock className="w-4 h-4 text-gray-400 mr-2" />,
+              }}
+              required
+            />
 
-        <div style={{ marginBottom: "15px" }}>
-          <label htmlFor="profilePictureUrl">
-            Profile Picture URL (optional):
-          </label>
-          <input
-            type="url"
-            id="profilePictureUrl"
-            name="profilePictureUrl"
-            value={formData.profilePictureUrl}
-            onChange={handleInputChange}
-            placeholder="Enter profile picture URL"
-            disabled={isSubmitting || loading}
-            style={{
-              display: "block",
-              marginTop: "5px",
-              padding: "8px",
-              width: "300px",
-            }}
-          />
-        </div>
+            <TextField
+              fullWidth
+              type="tel"
+              name="phone"
+              label="Phone Number (Optional)"
+              value={formData.phone}
+              onChange={handleInputChange}
+              placeholder="Enter your phone number"
+              disabled={isSubmitting || loading}
+              error={!!errors.phone}
+              helperText={errors.phone}
+              InputProps={{
+                startAdornment: (
+                  <Phone className="w-4 h-4 text-gray-400 mr-2" />
+                ),
+              }}
+            />
 
-        {(errors.submit || error) && (
-          <div
-            style={{
-              color: "red",
-              margin: "10px 0",
-              padding: "10px",
-              border: "1px solid red",
-              borderRadius: "4px",
-            }}
-          >
-            {errors.submit || error}
-          </div>
-        )}
+            <TextField
+              fullWidth
+              type="url"
+              name="profilePictureUrl"
+              label="Profile Picture URL (Optional)"
+              value={formData.profilePictureUrl}
+              onChange={handleInputChange}
+              placeholder="Enter profile picture URL"
+              disabled={isSubmitting || loading}
+              InputProps={{
+                startAdornment: (
+                  <ImageIcon className="w-4 h-4 text-gray-400 mr-2" />
+                ),
+              }}
+            />
 
-        <button
-          onClick={handleSubmit}
-          disabled={isSubmitting || loading}
-          style={{
-            padding: "10px 20px",
-            cursor: isSubmitting || loading ? "not-allowed" : "pointer",
-          }}
-        >
-          {isSubmitting || loading ? "Creating Account..." : "Create Account"}
-        </button>
-      </div>
+            {(errors.submit || error) && (
+              <Alert severity="error" className="rounded-lg">
+                {errors.submit || error}
+              </Alert>
+            )}
 
-      <p style={{ marginTop: "20px" }}>
-        Already have an account?{" "}
-        <button
-          type="button"
-          onClick={onSwitchToLogin}
-          style={{
-            background: "none",
-            border: "none",
-            color: "blue",
-            textDecoration: "underline",
-            cursor: "pointer",
-          }}
-        >
-          Login here
-        </button>
-      </p>
+            <Button
+              type="submit"
+              variant="contained"
+              fullWidth
+              disabled={isSubmitting || loading}
+              className="bg-green-600 hover:bg-green-700 py-3 text-white"
+            >
+              {isSubmitting || loading ? (
+                <Box className="flex items-center gap-2">
+                  <CircularProgress size={20} color="inherit" />
+                  Creating Account...
+                </Box>
+              ) : (
+                "Create Account"
+              )}
+            </Button>
+          </form>
+
+          <Divider className="my-6" />
+
+          <Box className="text-center">
+            <Typography variant="body2" className="text-gray-600">
+              Already have an account?{" "}
+              <Button
+                variant="text"
+                onClick={onSwitchToLogin}
+                className="text-green-600 hover:text-green-700 p-0 font-semibold"
+              >
+                Sign in here
+              </Button>
+            </Typography>
+          </Box>
+        </CardContent>
+      </Card>
     </div>
   );
 };

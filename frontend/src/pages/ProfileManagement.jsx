@@ -1,4 +1,15 @@
+"use client";
+
 import React, { useState } from "react";
+import {
+  Box,
+  Grid,
+  TextField,
+  Button,
+  Typography,
+  Alert,
+  Avatar,
+} from "@mui/material";
 import { useAuth } from "../context/AuthContext";
 
 const ProfileManagement = () => {
@@ -14,53 +25,64 @@ const ProfileManagement = () => {
   const [errors, setErrors] = useState({});
   const [success, setSuccess] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [uploadedImage, setUploadedImage] = useState(null);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
 
-    // Clear field-specific error when user starts typing
-    if (errors[name]) {
+    if (errors[name]) setErrors((prev) => ({ ...prev, [name]: "" }));
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
       setErrors((prev) => ({
         ...prev,
-        [name]: "",
+        profilePicture: "File must be an image",
       }));
+      return;
     }
+    if (file.size > 5 * 1024 * 1024) {
+      setErrors((prev) => ({
+        ...prev,
+        profilePicture: "Image too large (max 5MB)",
+      }));
+      return;
+    }
+
+    setUploadedImage(file);
+    setFormData((prev) => ({
+      ...prev,
+      profilePictureUrl: URL.createObjectURL(file), // preview only
+    }));
+    setErrors((prev) => ({ ...prev, profilePicture: "" }));
   };
 
   const validateForm = () => {
     const newErrors = {};
-
-    // First name validation
-    if (!formData.firstName.trim()) {
+    if (!formData.firstName.trim())
       newErrors.firstName = "First name is required";
-    } else if (
+    else if (
       formData.firstName.trim().length < 2 ||
       formData.firstName.trim().length > 50
-    ) {
-      newErrors.firstName = "First name must be between 2 and 50 characters";
-    }
+    )
+      newErrors.firstName = "First name must be 2-50 characters";
 
-    // Last name validation
-    if (!formData.lastName.trim()) {
-      newErrors.lastName = "Last name is required";
-    } else if (
+    if (!formData.lastName.trim()) newErrors.lastName = "Last name is required";
+    else if (
       formData.lastName.trim().length < 2 ||
       formData.lastName.trim().length > 50
-    ) {
-      newErrors.lastName = "Last name must be between 2 and 50 characters";
-    }
+    )
+      newErrors.lastName = "Last name must be 2-50 characters";
 
-    // Phone validation (optional)
-    if (formData.phone && formData.phone.trim()) {
+    if (formData.phone?.trim()) {
       const phoneRegex = /^[+]?[1-9][\d]{0,15}$/;
       const cleanPhone = formData.phone.replace(/[\s\-()]/g, "");
-      if (!phoneRegex.test(cleanPhone)) {
-        newErrors.phone = "Please provide a valid phone number";
-      }
+      if (!phoneRegex.test(cleanPhone))
+        newErrors.phone = "Invalid phone number";
     }
 
     setErrors(newErrors);
@@ -69,25 +91,29 @@ const ProfileManagement = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
-    if (!validateForm()) {
-      return;
-    }
+    if (!validateForm()) return;
 
     setIsSubmitting(true);
     setSuccess("");
-
     try {
-      const result = await updateProfile(formData);
+      const payload = {
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        phone: formData.phone,
+        // ❌ don’t send blob: URL to backend
+        profilePictureUrl: uploadedImage ? null : formData.profilePictureUrl,
+      };
 
+      const result = await updateProfile(payload);
       if (result.success) {
         setSuccess("Profile updated successfully!");
         setIsEditing(false);
+        setUploadedImage(null);
       } else {
         setErrors({ submit: result.error });
       }
-    } catch (error) {
-      setErrors({ submit: "An unexpected error occurred" });
+    } catch {
+      setErrors({ submit: "Unexpected error occurred" });
     } finally {
       setIsSubmitting(false);
     }
@@ -103,376 +129,199 @@ const ProfileManagement = () => {
     });
     setErrors({});
     setSuccess("");
+    setUploadedImage(null);
     setIsEditing(false);
   };
 
-  const renderViewMode = () => (
-    <div style={{ maxWidth: "600px", margin: "20px auto" }}>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: "30px",
-        }}
-      >
-        <h2>Profile Information</h2>
-        <button
-          onClick={() => setIsEditing(true)}
-          style={{
-            padding: "10px 20px",
-            backgroundColor: "#007bff",
-            color: "white",
-            border: "none",
-            cursor: "pointer",
-          }}
-        >
-          Edit Profile
-        </button>
-      </div>
-
-      {success && (
-        <div
-          style={{
-            color: "#155724",
-            backgroundColor: "#d4edda",
-            padding: "10px",
-            border: "1px solid #c3e6cb",
-            borderRadius: "4px",
-            marginBottom: "20px",
-          }}
-        >
-          {success}
-        </div>
-      )}
-
-      <div style={{ display: "grid", gap: "20px" }}>
-        <div
-          style={{
-            border: "1px solid #ddd",
-            borderRadius: "8px",
-            padding: "20px",
-          }}
-        >
-          <h3 style={{ marginTop: 0 }}>Personal Information</h3>
-
-          <div style={{ marginBottom: "15px" }}>
-            <label
-              style={{
-                fontWeight: "bold",
-                display: "block",
-                marginBottom: "5px",
-              }}
-            >
-              Name:
-            </label>
-            <span>
-              {user?.firstName} {user?.lastName}
-            </span>
-          </div>
-
-          <div style={{ marginBottom: "15px" }}>
-            <label
-              style={{
-                fontWeight: "bold",
-                display: "block",
-                marginBottom: "5px",
-              }}
-            >
-              Email:
-            </label>
-            <span>{user?.email}</span>
-            {!user?.emailVerified && (
-              <span
-                style={{
-                  marginLeft: "10px",
-                  color: "#dc3545",
-                  fontSize: "14px",
-                  backgroundColor: "#f8d7da",
-                  padding: "2px 6px",
-                  borderRadius: "12px",
-                }}
-              >
-                Not verified
-              </span>
-            )}
-          </div>
-
-          <div style={{ marginBottom: "15px" }}>
-            <label
-              style={{
-                fontWeight: "bold",
-                display: "block",
-                marginBottom: "5px",
-              }}
-            >
-              Phone:
-            </label>
-            <span>{user?.phone || "Not provided"}</span>
-          </div>
-
-          <div style={{ marginBottom: "15px" }}>
-            <label
-              style={{
-                fontWeight: "bold",
-                display: "block",
-                marginBottom: "5px",
-              }}
-            >
-              Profile Picture:
-            </label>
-            {user?.profilePictureUrl ? (
-              <div>
-                <img
-                  src={user.profilePictureUrl}
-                  alt="Profile"
-                  style={{
-                    width: "100px",
-                    height: "100px",
-                    objectFit: "cover",
-                    borderRadius: "50%",
-                  }}
-                  onError={(e) => {
-                    e.target.style.display = "none";
-                    e.target.nextElementSibling.style.display = "block";
-                  }}
-                />
-                <div style={{ display: "none", color: "#666" }}>
-                  Invalid image URL
-                </div>
-              </div>
-            ) : (
-              <span style={{ color: "#666" }}>No profile picture</span>
-            )}
-          </div>
-        </div>
-
-        <div
-          style={{
-            border: "1px solid #ddd",
-            borderRadius: "8px",
-            padding: "20px",
-          }}
-        >
-          <h3 style={{ marginTop: 0 }}>Account Information</h3>
-
-          <div style={{ marginBottom: "15px" }}>
-            <label
-              style={{
-                fontWeight: "bold",
-                display: "block",
-                marginBottom: "5px",
-              }}
-            >
-              Member Since:
-            </label>
-            <span>
-              {user?.createdAt
-                ? new Date(user.createdAt).toLocaleDateString()
-                : "N/A"}
-            </span>
-          </div>
-
-          <div style={{ marginBottom: "15px" }}>
-            <label
-              style={{
-                fontWeight: "bold",
-                display: "block",
-                marginBottom: "5px",
-              }}
-            >
-              Last Login:
-            </label>
-            <span>
-              {user?.lastLogin
-                ? new Date(user.lastLogin).toLocaleString()
-                : "N/A"}
-            </span>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
   const renderEditMode = () => (
-    <div style={{ maxWidth: "600px", margin: "20px auto" }}>
-      <h2>Edit Profile</h2>
+    <Box maxWidth="600px" mx="auto" mt={4}>
+      <Typography variant="h5" mb={3}>
+        Edit Profile
+      </Typography>
 
       {errors.submit && (
-        <div
-          style={{
-            color: "red",
-            padding: "10px",
-            border: "1px solid red",
-            borderRadius: "4px",
-            marginBottom: "20px",
-          }}
-        >
+        <Alert severity="error" sx={{ mb: 2 }}>
           {errors.submit}
-        </div>
+        </Alert>
       )}
 
-      <div style={{ display: "grid", gap: "15px" }}>
-        <div>
-          <label
-            style={{
-              display: "block",
-              marginBottom: "5px",
-              fontWeight: "bold",
-            }}
-          >
-            First Name *:
-          </label>
-          <input
-            type="text"
+      <Grid container spacing={2}>
+        <Grid item xs={12} sm={6}>
+          <TextField
+            label="First Name"
             name="firstName"
             value={formData.firstName}
             onChange={handleInputChange}
+            fullWidth
+            error={!!errors.firstName}
+            helperText={errors.firstName}
             disabled={isSubmitting || loading}
-            style={{
-              width: "100%",
-              padding: "8px",
-              border: errors.firstName ? "1px solid red" : "1px solid #ddd",
-            }}
           />
-          {errors.firstName && (
-            <div style={{ color: "red", fontSize: "14px", marginTop: "3px" }}>
-              {errors.firstName}
-            </div>
-          )}
-        </div>
-
-        <div>
-          <label
-            style={{
-              display: "block",
-              marginBottom: "5px",
-              fontWeight: "bold",
-            }}
-          >
-            Last Name *:
-          </label>
-          <input
-            type="text"
+        </Grid>
+        <Grid item xs={12} sm={6}>
+          <TextField
+            label="Last Name"
             name="lastName"
             value={formData.lastName}
             onChange={handleInputChange}
+            fullWidth
+            error={!!errors.lastName}
+            helperText={errors.lastName}
             disabled={isSubmitting || loading}
-            style={{
-              width: "100%",
-              padding: "8px",
-              border: errors.lastName ? "1px solid red" : "1px solid #ddd",
-            }}
           />
-          {errors.lastName && (
-            <div style={{ color: "red", fontSize: "14px", marginTop: "3px" }}>
-              {errors.lastName}
-            </div>
-          )}
-        </div>
-
-        <div>
-          <label
-            style={{
-              display: "block",
-              marginBottom: "5px",
-              fontWeight: "bold",
-            }}
-          >
-            Phone:
-          </label>
-          <input
-            type="tel"
+        </Grid>
+        <Grid item xs={12}>
+          <TextField
+            label="Phone"
             name="phone"
             value={formData.phone}
             onChange={handleInputChange}
-            placeholder="Enter your phone number"
+            fullWidth
+            error={!!errors.phone}
+            helperText={errors.phone}
             disabled={isSubmitting || loading}
-            style={{
-              width: "100%",
-              padding: "8px",
-              border: errors.phone ? "1px solid red" : "1px solid #ddd",
-            }}
           />
-          {errors.phone && (
-            <div style={{ color: "red", fontSize: "14px", marginTop: "3px" }}>
-              {errors.phone}
-            </div>
-          )}
-        </div>
-
-        <div>
-          <label
-            style={{
-              display: "block",
-              marginBottom: "5px",
-              fontWeight: "bold",
-            }}
+        </Grid>
+        <Grid item xs={12}>
+          <Button
+            variant="outlined"
+            component="label"
+            disabled={isSubmitting || loading}
           >
-            Profile Picture URL:
-          </label>
-          <input
-            type="url"
-            name="profilePictureUrl"
-            value={formData.profilePictureUrl}
-            onChange={handleInputChange}
-            placeholder="Enter profile picture URL"
-            disabled={isSubmitting || loading}
-            style={{ width: "100%", padding: "8px", border: "1px solid #ddd" }}
-          />
+            Upload Profile Picture
+            <input
+              type="file"
+              hidden
+              accept="image/*"
+              onChange={handleFileChange}
+            />
+          </Button>
+          {errors.profilePicture && (
+            <Typography color="error" variant="body2">
+              {errors.profilePicture}
+            </Typography>
+          )}
           {formData.profilePictureUrl && (
-            <div style={{ marginTop: "10px" }}>
-              <img
+            <Box mt={1}>
+              <Avatar
                 src={formData.profilePictureUrl}
-                alt="Profile Preview"
-                style={{
-                  width: "100px",
-                  height: "100px",
-                  objectFit: "cover",
-                  borderRadius: "50%",
-                }}
-                onError={(e) => {
-                  e.target.style.display = "none";
-                  e.target.nextElementSibling.style.display = "block";
-                }}
+                sx={{ width: 80, height: 80 }}
               />
-              <div style={{ display: "none", color: "red", fontSize: "14px" }}>
-                Invalid image URL
-              </div>
-            </div>
+            </Box>
           )}
-        </div>
+        </Grid>
+      </Grid>
 
-        <div style={{ display: "flex", gap: "10px", marginTop: "20px" }}>
-          <button
-            onClick={handleSubmit}
-            disabled={isSubmitting || loading}
-            style={{
-              padding: "10px 20px",
-              backgroundColor: "#28a745",
-              color: "white",
-              border: "none",
-              cursor: isSubmitting || loading ? "not-allowed" : "pointer",
-            }}
-          >
-            {isSubmitting || loading ? "Updating..." : "Update Profile"}
-          </button>
-          <button
-            onClick={handleCancel}
-            disabled={isSubmitting || loading}
-            style={{
-              padding: "10px 20px",
-              backgroundColor: "#6c757d",
-              color: "white",
-              border: "none",
-              cursor: isSubmitting || loading ? "not-allowed" : "pointer",
-            }}
-          >
-            Cancel
-          </button>
-        </div>
-      </div>
-    </div>
+      <Box mt={3} display="flex" gap={2}>
+        <Button
+          variant="contained"
+          color="success"
+          onClick={handleSubmit}
+          disabled={isSubmitting || loading}
+        >
+          {isSubmitting || loading ? "Updating..." : "Update Profile"}
+        </Button>
+        <Button
+          variant="outlined"
+          color="secondary"
+          onClick={handleCancel}
+          disabled={isSubmitting || loading}
+        >
+          Cancel
+        </Button>
+      </Box>
+    </Box>
+  );
+
+  const renderViewMode = () => (
+    <Box maxWidth="600px" mx="auto" mt={4}>
+      <Box
+        display="flex"
+        justifyContent="space-between"
+        alignItems="center"
+        mb={3}
+      >
+        <Typography variant="h5">Profile Information</Typography>
+        <Button
+          variant="contained"
+          color="primary"
+          onClick={() => setIsEditing(true)}
+        >
+          Edit Profile
+        </Button>
+      </Box>
+
+      {success && (
+        <Alert severity="success" sx={{ mb: 2 }}>
+          {success}
+        </Alert>
+      )}
+
+      <Grid container spacing={3}>
+        <Grid item xs={12} sm={6}>
+          <Typography variant="subtitle2">Name</Typography>
+          <Typography>
+            {user?.firstName} {user?.lastName}
+          </Typography>
+        </Grid>
+
+        <Grid item xs={12} sm={6}>
+          <Typography variant="subtitle2">Email</Typography>
+          <Typography>
+            {user?.email}
+            {!user?.emailVerified && (
+              <Box
+                component="span"
+                ml={1}
+                px={1}
+                bgcolor="#f8d7da"
+                color="#dc3545"
+                borderRadius="12px"
+                fontSize={12}
+              >
+                Not Verified
+              </Box>
+            )}
+          </Typography>
+        </Grid>
+
+        <Grid item xs={12} sm={6}>
+          <Typography variant="subtitle2">Phone</Typography>
+          <Typography>{user?.phone || "Not provided"}</Typography>
+        </Grid>
+
+        <Grid item xs={12} sm={6}>
+          <Typography variant="subtitle2">Profile Picture</Typography>
+          {user?.profilePictureUrl ? (
+            <Avatar
+              src={user.profilePictureUrl}
+              alt="Profile"
+              sx={{ width: 80, height: 80 }}
+            />
+          ) : (
+            <Typography color="textSecondary">No profile picture</Typography>
+          )}
+        </Grid>
+
+        <Grid item xs={12} sm={6}>
+          <Typography variant="subtitle2">Member Since</Typography>
+          <Typography>
+            {user?.createdAt
+              ? new Date(user.createdAt).toLocaleDateString()
+              : "N/A"}
+          </Typography>
+        </Grid>
+
+        <Grid item xs={12} sm={6}>
+          <Typography variant="subtitle2">Last Login</Typography>
+          <Typography>
+            {user?.lastLogin
+              ? new Date(user.lastLogin).toLocaleString()
+              : "N/A"}
+          </Typography>
+        </Grid>
+      </Grid>
+    </Box>
   );
 
   return isEditing ? renderEditMode() : renderViewMode();

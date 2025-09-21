@@ -1,5 +1,29 @@
-import React, { useEffect, useState } from "react";
+"use client";
+
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  Typography,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  Chip,
+  Button,
+  CircularProgress,
+  Box,
+  Container,
+} from "@mui/material";
+import { History, Eye, TrendingUp, TrendingDown, Clock } from "lucide-react";
+import toast from "react-hot-toast";
+
+const API_URL = "http://localhost:3005/api/settlements/settlements";
 
 const SettlementHistory = () => {
   const [settlements, setSettlements] = useState([]);
@@ -8,21 +32,16 @@ const SettlementHistory = () => {
   const fetchHistory = async () => {
     try {
       setLoading(true);
-      const res = await fetch(
-        `http://localhost:3005/api/settlements/settlements`,
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
-          credentials: "include",
-        }
-      );
+      const res = await fetch(API_URL, {
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+        credentials: "include",
+      });
       const data = await res.json();
-      if (data.success) {
-        setSettlements(data.data.settlements || []);
-      }
+      if (data.success) setSettlements(data.data.settlements || []);
+      else toast.error("Failed to fetch settlement history");
     } catch (err) {
       console.error(err);
+      toast.error("Error fetching settlement history");
     } finally {
       setLoading(false);
     }
@@ -32,92 +51,128 @@ const SettlementHistory = () => {
     fetchHistory();
   }, []);
 
-  const getStatusStyle = (status) => {
+  const getStatusColor = (status) => {
     switch (status) {
       case "confirmed":
-        return {
-          background: "#28a745",
-          color: "white",
-          padding: "4px 8px",
-          borderRadius: "4px",
-        };
+        return "success";
       case "pending":
-        return {
-          background: "#ffc107",
-          color: "black",
-          padding: "4px 8px",
-          borderRadius: "4px",
-        };
+        return "warning";
       case "disputed":
-        return {
-          background: "#dc3545",
-          color: "white",
-          padding: "4px 8px",
-          borderRadius: "4px",
-        };
+        return "error";
       default:
-        return {};
+        return "default";
     }
   };
 
-  const renderTable = (list, title) => (
-    <div style={{ marginBottom: "24px" }}>
-      <h3>{title}</h3>
-      {list.length === 0 ? (
-        <p>No {title.toLowerCase()}</p>
-      ) : (
-        <table
-          style={{
-            width: "100%",
-            borderCollapse: "collapse",
-            marginTop: "10px",
-          }}
-        >
-          <thead>
-            <tr style={{ background: "#f8f9fa" }}>
-              <th style={thStyle}>Description</th>
-              <th style={thStyle}>Amount</th>
-              <th style={thStyle}>Status</th>
-              <th style={thStyle}>Date</th>
-              <th style={thStyle}>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {list.map((s) => (
-              <tr key={s.id} style={{ borderBottom: "1px solid #ddd" }}>
-                <td style={tdStyle}>{s.displayText}</td>
-                <td style={tdStyle}>${s.amount}</td>
-                <td style={tdStyle}>
-                  <span style={getStatusStyle(s.status)}>{s.status}</span>
-                </td>
-                <td style={tdStyle}>
-                  {s.createdAt
-                    ? new Date(s.createdAt).toLocaleDateString()
-                    : "-"}
-                </td>
-                <td style={tdStyle}>
-                  <Link
-                    to={`/settlements/${s.id}`}
-                    style={{
-                      padding: "6px 12px",
-                      background: "#007bff",
-                      color: "white",
-                      borderRadius: "4px",
-                      textDecoration: "none",
-                    }}
-                  >
-                    View
-                  </Link>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-    </div>
+  const getStatusIcon = (status) => {
+    switch (status) {
+      case "confirmed":
+        return <TrendingUp className="w-4 h-4" />;
+      case "pending":
+        return <Clock className="w-4 h-4" />;
+      case "disputed":
+        return <TrendingDown className="w-4 h-4" />;
+      default:
+        return null;
+    }
+  };
+
+  const renderSettlementTable = (list, title, icon) => (
+    <Card className="mb-6 shadow-sm">
+      <CardHeader
+        title={
+          <Box className="flex items-center gap-2">
+            {icon}{" "}
+            <Typography variant="h6" className="font-semibold">
+              {title}
+            </Typography>
+          </Box>
+        }
+        subheader={`${list.length} settlement${list.length !== 1 ? "s" : ""}`}
+      />
+      <CardContent className="pt-0">
+        {list.length === 0 ? (
+          <Box className="text-center py-8">
+            <Typography variant="body2" className="text-gray-500">
+              No {title.toLowerCase()}
+            </Typography>
+          </Box>
+        ) : (
+          <TableContainer
+            component={Paper}
+            className="shadow-none border border-gray-200"
+          >
+            <Table>
+              <TableHead className="bg-gray-50">
+                <TableRow>
+                  <TableCell className="font-semibold">Description</TableCell>
+                  <TableCell className="font-semibold">Amount</TableCell>
+                  <TableCell className="font-semibold">Status</TableCell>
+                  <TableCell className="font-semibold">Date</TableCell>
+                  <TableCell className="font-semibold">Actions</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {list.map((s) => (
+                  <TableRow key={s.id} className="hover:bg-gray-50">
+                    <TableCell>
+                      <Typography variant="body2" className="font-medium">
+                        {s.displayText}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" className="font-semibold">
+                        ${s.amount}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Chip
+                        label={s.status}
+                        color={getStatusColor(s.status)}
+                        size="small"
+                        icon={getStatusIcon(s.status)}
+                        className="capitalize"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" className="text-gray-600">
+                        {s.createdAt
+                          ? new Date(s.createdAt).toLocaleDateString()
+                          : "-"}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        component={Link}
+                        to={`/settlements/${s.id}`}
+                        variant="outlined"
+                        size="small"
+                        startIcon={<Eye className="w-4 h-4" />}
+                        className="text-blue-600 border-blue-600 hover:bg-blue-50"
+                      >
+                        View
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
+      </CardContent>
+    </Card>
   );
 
-  if (loading) return <p>Loading...</p>;
+  if (loading) {
+    return (
+      <Box className="flex flex-col items-center justify-center min-h-64 py-16">
+        <CircularProgress />
+        <Typography variant="body2" className="mt-3 text-gray-600">
+          Loading settlement history...
+        </Typography>
+      </Box>
+    );
+  }
 
   const incoming = settlements.filter(
     (s) => s.direction === "incoming" && s.status === "pending"
@@ -128,16 +183,35 @@ const SettlementHistory = () => {
   const confirmed = settlements.filter((s) => s.status === "confirmed");
 
   return (
-    <div style={{ padding: 20 }}>
-      <h2>Settlement History</h2>
-      {renderTable(incoming, "Incoming Settlements (Waiting for You)")}
-      {renderTable(outgoing, "Outgoing Settlements (Waiting for Others)")}
-      {renderTable(confirmed, "Confirmed Settlements")}
-    </div>
+    <Container maxWidth="6xl" className="py-6">
+      <Box className="mb-8">
+        <Typography variant="h4" className="font-bold flex items-center gap-3">
+          <History className="w-8 h-8 text-blue-600" /> Settlement History
+        </Typography>
+        <Typography variant="body1" className="text-gray-600 mt-2">
+          Track and manage all your settlement transactions
+        </Typography>
+      </Box>
+
+      {renderSettlementTable(
+        incoming,
+        "Incoming Settlements (Waiting for You)",
+        <TrendingUp className="w-5 h-5 text-green-600" />
+      )}
+
+      {renderSettlementTable(
+        outgoing,
+        "Outgoing Settlements (Waiting for Others)",
+        <TrendingDown className="w-5 h-5 text-orange-600" />
+      )}
+
+      {renderSettlementTable(
+        confirmed,
+        "Confirmed Settlements",
+        <TrendingUp className="w-5 h-5 text-blue-600" />
+      )}
+    </Container>
   );
 };
-
-const thStyle = { textAlign: "left", padding: "8px" };
-const tdStyle = { padding: "8px" };
 
 export default SettlementHistory;

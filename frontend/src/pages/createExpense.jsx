@@ -1,7 +1,23 @@
+"use client";
+
 // src/pages/CreateExpense.jsx
-import React, { useState } from "react";
+import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  Typography,
+  TextField,
+  Button,
+  Box,
+  Alert,
+  CircularProgress,
+  Container,
+} from "@mui/material";
+import { ArrowLeft, DollarSign, FileText, Tag } from "lucide-react";
+import { toast } from "react-hot-toast";
 
 const CreateExpense = () => {
   const { groupId } = useParams();
@@ -40,54 +56,141 @@ const CreateExpense = () => {
 
       const data = await res.json();
       if (data.success) {
+        toast.success("Expense created successfully!");
         navigate(`/groups/${groupId}/expenses`);
       } else {
         setError(data.message || "Failed to create expense");
+        toast.error(data.message || "Failed to create expense");
       }
     } catch (err) {
       console.error("Error creating expense:", err);
-      setError("Something went wrong");
+      const errorMsg = "Something went wrong";
+      setError(errorMsg);
+      toast.error(errorMsg);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div style={{ padding: "20px" }}>
-      <h2>Create Expense</h2>
-      <form onSubmit={handleSubmit}>
-        <div>
-          <label>Amount:</label>
-          <input
-            type="number"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            required
-          />
-        </div>
-        <div>
-          <label>Description:</label>
-          <input
-            type="text"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            required
-          />
-        </div>
-        <div>
-          <label>Category:</label>
-          <input
-            type="text"
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-          />
-        </div>
-        <button type="submit" disabled={loading}>
-          {loading ? "Creating..." : "Create Expense"}
-        </button>
-      </form>
-      {error && <p style={{ color: "red" }}>{error}</p>}
-    </div>
+    <Container maxWidth="md" className="py-8">
+      <Box className="mb-6">
+        <Button
+          startIcon={<ArrowLeft className="w-4 h-4" />}
+          onClick={() => navigate(-1)}
+          className="mb-4 text-gray-600"
+          sx={{ textTransform: "none" }}
+        >
+          Back
+        </Button>
+
+        <Typography variant="h4" className="font-bold text-gray-900 mb-2">
+          Create New Expense
+        </Typography>
+        <Typography variant="body2" className="text-gray-600">
+          Add a new expense to group {groupId}
+        </Typography>
+      </Box>
+
+      <Card className="shadow-lg rounded-2xl border-0">
+        <CardHeader className="pb-4">
+          <Typography variant="h6" className="font-semibold">
+            Expense Details
+          </Typography>
+        </CardHeader>
+
+        <CardContent className="space-y-6">
+          {error && (
+            <Alert severity="error" className="rounded-lg">
+              {error}
+            </Alert>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <TextField
+              fullWidth
+              label="Amount"
+              type="number"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              required
+              InputProps={{
+                startAdornment: (
+                  <DollarSign className="w-4 h-4 mr-2 text-gray-500" />
+                ),
+              }}
+              className="bg-gray-50"
+              variant="outlined"
+              placeholder="0.00"
+            />
+
+            <TextField
+              fullWidth
+              label="Description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              required
+              InputProps={{
+                startAdornment: (
+                  <FileText className="w-4 h-4 mr-2 text-gray-500" />
+                ),
+              }}
+              className="bg-gray-50"
+              variant="outlined"
+              placeholder="What was this expense for?"
+            />
+
+            <TextField
+              fullWidth
+              label="Category"
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              InputProps={{
+                startAdornment: <Tag className="w-4 h-4 mr-2 text-gray-500" />,
+              }}
+              className="bg-gray-50"
+              variant="outlined"
+              placeholder="e.g., Food, Transport, Entertainment"
+            />
+
+            <Box className="flex gap-3 pt-4">
+              <Button
+                type="button"
+                variant="outlined"
+                onClick={() => navigate(-1)}
+                className="flex-1"
+                sx={{ textTransform: "none" }}
+              >
+                Cancel
+              </Button>
+
+              <Button
+                type="submit"
+                variant="contained"
+                disabled={loading}
+                className="flex-1 bg-blue-600 hover:bg-blue-700"
+                sx={{
+                  textTransform: "none",
+                  backgroundColor: "rgb(37, 99, 235)",
+                  "&:hover": {
+                    backgroundColor: "rgb(29, 78, 216)",
+                  },
+                }}
+                startIcon={
+                  loading ? (
+                    <CircularProgress size={18} color="inherit" />
+                  ) : (
+                    <DollarSign className="w-4 h-4" />
+                  )
+                }
+              >
+                {loading ? "Creating..." : "Create Expense"}
+              </Button>
+            </Box>
+          </form>
+        </CardContent>
+      </Card>
+    </Container>
   );
 };
 

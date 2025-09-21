@@ -1,5 +1,23 @@
-import React, { useState } from "react";
+"use client";
+
+import { useState } from "react";
 import { useAuth } from "../context/AuthContext";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  TextField,
+  Button,
+  Typography,
+  Box,
+  Alert,
+  FormControlLabel,
+  Checkbox,
+  CircularProgress,
+  Divider,
+} from "@mui/material";
+import { Mail, Lock, LogIn } from "lucide-react";
+import toast from "react-hot-toast";
 
 const Login = ({ onSwitchToRegister, onLoginSuccess }) => {
   const [formData, setFormData] = useState({
@@ -66,128 +84,127 @@ const Login = ({ onSwitchToRegister, onLoginSuccess }) => {
 
       if (result.success) {
         console.log("Login successful:", result.user);
+        toast.success("Welcome back!");
         if (onLoginSuccess) {
           onLoginSuccess(result.user);
         }
       } else {
         setErrors({ submit: result.error });
+        toast.error(result.error || "Login failed");
       }
     } catch (error) {
-      setErrors({ submit: "An unexpected error occurred", error });
+      setErrors({ submit: "An unexpected error occurred" });
+      toast.error("An unexpected error occurred");
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <div>
-      <h2>Login</h2>
-
-      <div>
-        <div style={{ marginBottom: "15px" }}>
-          <label htmlFor="email">Email:</label>
-          <input
-            type="email"
-            id="email"
-            name="email"
-            value={formData.email}
-            onChange={handleInputChange}
-            placeholder="Enter your email"
-            disabled={isSubmitting || loading}
-            style={{
-              display: "block",
-              marginTop: "5px",
-              padding: "8px",
-              width: "300px",
-            }}
-          />
-          {errors.email && (
-            <div style={{ color: "red", fontSize: "14px", marginTop: "3px" }}>
-              {errors.email}
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+      <Card className="w-full max-w-md shadow-lg">
+        <CardHeader className="text-center pb-4">
+          <Box className="flex justify-center mb-4">
+            <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center">
+              <LogIn className="w-6 h-6 text-white" />
             </div>
-          )}
-        </div>
+          </Box>
+          <Typography variant="h4" className="font-bold">
+            Welcome Back
+          </Typography>
+          <Typography variant="body2" className="text-gray-600 mt-2">
+            Sign in to your account to continue
+          </Typography>
+        </CardHeader>
 
-        <div style={{ marginBottom: "15px" }}>
-          <label htmlFor="password">Password:</label>
-          <input
-            type="password"
-            id="password"
-            name="password"
-            value={formData.password}
-            onChange={handleInputChange}
-            placeholder="Enter your password"
-            disabled={isSubmitting || loading}
-            style={{
-              display: "block",
-              marginTop: "5px",
-              padding: "8px",
-              width: "300px",
-            }}
-          />
-          {errors.password && (
-            <div style={{ color: "red", fontSize: "14px", marginTop: "3px" }}>
-              {errors.password}
-            </div>
-          )}
-        </div>
-
-        <div style={{ marginBottom: "15px" }}>
-          <label>
-            <input
-              type="checkbox"
-              name="rememberMe"
-              checked={formData.rememberMe}
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <TextField
+              fullWidth
+              type="email"
+              name="email"
+              label="Email Address"
+              value={formData.email}
               onChange={handleInputChange}
+              placeholder="Enter your email"
               disabled={isSubmitting || loading}
-              style={{ marginRight: "8px" }}
+              error={!!errors.email}
+              helperText={errors.email}
+              InputProps={{
+                startAdornment: <Mail className="w-4 h-4 text-gray-400 mr-2" />,
+              }}
             />
-            Remember me
-          </label>
-        </div>
 
-        {(errors.submit || error) && (
-          <div
-            style={{
-              color: "red",
-              margin: "10px 0",
-              padding: "10px",
-              border: "1px solid red",
-              borderRadius: "4px",
-            }}
-          >
-            {errors.submit || error}
-          </div>
-        )}
+            <TextField
+              fullWidth
+              type="password"
+              name="password"
+              label="Password"
+              value={formData.password}
+              onChange={handleInputChange}
+              placeholder="Enter your password"
+              disabled={isSubmitting || loading}
+              error={!!errors.password}
+              helperText={errors.password}
+              InputProps={{
+                startAdornment: <Lock className="w-4 h-4 text-gray-400 mr-2" />,
+              }}
+            />
 
-        <button
-          onClick={handleSubmit}
-          disabled={isSubmitting || loading}
-          style={{
-            padding: "10px 20px",
-            cursor: isSubmitting || loading ? "not-allowed" : "pointer",
-          }}
-        >
-          {isSubmitting || loading ? "Logging in..." : "Login"}
-        </button>
-      </div>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  name="rememberMe"
+                  checked={formData.rememberMe}
+                  onChange={handleInputChange}
+                  disabled={isSubmitting || loading}
+                  className="text-blue-600"
+                />
+              }
+              label="Remember me"
+              className="text-gray-700"
+            />
 
-      <p style={{ marginTop: "20px" }}>
-        Don't have an account?{" "}
-        <button
-          type="button"
-          onClick={onSwitchToRegister}
-          style={{
-            background: "none",
-            border: "none",
-            color: "blue",
-            textDecoration: "underline",
-            cursor: "pointer",
-          }}
-        >
-          Register here
-        </button>
-      </p>
+            {(errors.submit || error) && (
+              <Alert severity="error" className="rounded-lg">
+                {errors.submit || error}
+              </Alert>
+            )}
+
+            <Button
+              type="submit"
+              variant="contained"
+              fullWidth
+              disabled={isSubmitting || loading}
+              className="bg-blue-600 hover:bg-blue-700 py-3 text-white"
+            >
+              {isSubmitting || loading ? (
+                <Box className="flex items-center gap-2">
+                  <CircularProgress size={20} color="inherit" />
+                  Signing in...
+                </Box>
+              ) : (
+                "Sign In"
+              )}
+            </Button>
+          </form>
+
+          <Divider className="my-6" />
+
+          <Box className="text-center">
+            <Typography variant="body2" className="text-gray-600">
+              Don't have an account?{" "}
+              <Button
+                variant="text"
+                onClick={onSwitchToRegister}
+                className="text-blue-600 hover:text-blue-700 p-0 font-semibold"
+              >
+                Create one here
+              </Button>
+            </Typography>
+          </Box>
+        </CardContent>
+      </Card>
     </div>
   );
 };
