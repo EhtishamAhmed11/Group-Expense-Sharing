@@ -3,15 +3,13 @@ import { Link } from "react-router-dom";
 
 const SettlementHistory = () => {
   const [settlements, setSettlements] = useState([]);
-  const [filters, setFilters] = useState({ status: "", direction: "" });
   const [loading, setLoading] = useState(true);
 
   const fetchHistory = async () => {
-    const params = new URLSearchParams(filters).toString();
     try {
       setLoading(true);
       const res = await fetch(
-        `http://localhost:3005/api/settlements/settlements?${params}`,
+        `http://localhost:3005/api/settlements/settlements`,
         {
           headers: {
             Authorization: `Bearer ${localStorage.getItem("token")}`,
@@ -32,7 +30,7 @@ const SettlementHistory = () => {
 
   useEffect(() => {
     fetchHistory();
-  }, [filters]);
+  }, []);
 
   const getStatusStyle = (status) => {
     switch (status) {
@@ -62,42 +60,11 @@ const SettlementHistory = () => {
     }
   };
 
-  return (
-    <div style={{ padding: 20 }}>
-      <h2>Settlement History</h2>
-
-      {/* Filters */}
-      <div style={{ marginBottom: "16px", display: "flex", gap: "12px" }}>
-        <select
-          value={filters.status}
-          onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-        >
-          <option value="">All Status</option>
-          <option value="confirmed">Confirmed</option>
-          <option value="pending">Pending</option>
-          <option value="disputed">Disputed</option>
-        </select>
-        <select
-          value={filters.direction}
-          onChange={(e) =>
-            setFilters({ ...filters, direction: e.target.value })
-          }
-        >
-          <option value="">All Directions</option>
-          <option value="incoming">Incoming</option>
-          <option value="outgoing">Outgoing</option>
-        </select>
-        <button onClick={fetchHistory}>Refresh</button>
-        <button onClick={() => setFilters({ status: "", direction: "" })}>
-          Clear
-        </button>
-      </div>
-
-      {/* Settlements Table */}
-      {loading ? (
-        <p>Loading...</p>
-      ) : settlements.length === 0 ? (
-        <p>No settlements found</p>
+  const renderTable = (list, title) => (
+    <div style={{ marginBottom: "24px" }}>
+      <h3>{title}</h3>
+      {list.length === 0 ? (
+        <p>No {title.toLowerCase()}</p>
       ) : (
         <table
           style={{
@@ -116,7 +83,7 @@ const SettlementHistory = () => {
             </tr>
           </thead>
           <tbody>
-            {settlements.map((s) => (
+            {list.map((s) => (
               <tr key={s.id} style={{ borderBottom: "1px solid #ddd" }}>
                 <td style={tdStyle}>{s.displayText}</td>
                 <td style={tdStyle}>${s.amount}</td>
@@ -149,9 +116,27 @@ const SettlementHistory = () => {
       )}
     </div>
   );
+
+  if (loading) return <p>Loading...</p>;
+
+  const incoming = settlements.filter(
+    (s) => s.direction === "incoming" && s.status === "pending"
+  );
+  const outgoing = settlements.filter(
+    (s) => s.direction === "outgoing" && s.status === "pending"
+  );
+  const confirmed = settlements.filter((s) => s.status === "confirmed");
+
+  return (
+    <div style={{ padding: 20 }}>
+      <h2>Settlement History</h2>
+      {renderTable(incoming, "Incoming Settlements (Waiting for You)")}
+      {renderTable(outgoing, "Outgoing Settlements (Waiting for Others)")}
+      {renderTable(confirmed, "Confirmed Settlements")}
+    </div>
+  );
 };
 
-// small styles for table
 const thStyle = { textAlign: "left", padding: "8px" };
 const tdStyle = { padding: "8px" };
 

@@ -12,7 +12,6 @@ export default function SettlementDetails() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // confirm/dispute state
   const [confirm, setConfirm] = useState(true);
   const [reason, setReason] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
@@ -22,12 +21,9 @@ export default function SettlementDetails() {
       try {
         const res = await fetch(
           `${API_BASE_URL}/settlements/settlements/${id}`,
-          {
-            credentials: "include",
-          }
+          { credentials: "include" }
         );
         const data = await res.json();
-        console.log(data);
         if (data.success && data.data?.settlement) {
           setSettlement(data.data.settlement);
         } else {
@@ -45,18 +41,22 @@ export default function SettlementDetails() {
   const handleConfirmAction = async () => {
     setActionLoading(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/settlements/settlements/${id}/confirm`, {
+      const res = await fetch(`${API_BASE_URL}/settlements/${id}/confirm`, {
         method: "PUT",
         credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ confirm, disputeReason: reason }),
       });
       const data = await res.json();
       if (!data.success) throw new Error(data.message || "Failed to update");
-      alert(confirm ? "Settlement confirmed ✅" : "Settlement disputed ❌");
-      navigate("/settlements"); // back to list
+
+      if (data.message === "Settlement already confirmed by both parties") {
+        alert("Settlement is already fully confirmed ✅");
+      } else {
+        alert(confirm ? "Settlement confirmed ✅" : "Settlement disputed ❌");
+      }
+
+      navigate("/settlements");
     } catch (err) {
       alert(err.message);
     } finally {
@@ -68,6 +68,18 @@ export default function SettlementDetails() {
   if (error) return <p style={{ color: "red" }}>{error}</p>;
   if (!settlement) return <p>No settlement found</p>;
 
+  const fullyConfirmed =
+    settlement.confirmationStatus?.fullyConfirmed ||
+    settlement.status === "confirmed";
+
+  const canTakeAction =
+    !fullyConfirmed &&
+    !settlement.disputed &&
+    ((settlement.userRole === "payer" &&
+      !settlement.confirmationStatus?.confirmedByPayer) ||
+      (settlement.userRole === "receiver" &&
+        !settlement.confirmationStatus?.confirmedByReceiver));
+
   return (
     <div style={{ padding: 16, maxWidth: 600 }}>
       <h2>Settlement Details</h2>
@@ -78,70 +90,112 @@ export default function SettlementDetails() {
         <strong>Group:</strong> {settlement.group?.name || settlement.groupId}
       </p>
       <p>
-        <strong>Other User:</strong>{" "}
-        {settlement.otherUser?.name || settlement.otherUserId}
+        <strong>Payer:</strong>{" "}
+        {settlement.payer?.name || settlement.payer?.email}
       </p>
       <p>
-        <strong>Amount:</strong> {settlement.amount}
+        <strong>Receiver:</strong>{" "}
+        {settlement.receiver?.name || settlement.receiver?.email}
       </p>
       <p>
-        <strong>Status:</strong> {settlement.status}
+        <strong>Amount:</strong> ${settlement.amount}
       </p>
       <p>
-        <strong>Notes:</strong> {settlement.notes || "—"}
+        <strong>Status:</strong>{" "}
+        <span style={{ color: fullyConfirmed ? "green" : "orange" }}>
+          {settlement.status}
+        </span>
+      </p>
+      <p>
+        <strong>Method:</strong> {settlement.method}
+      </p>
+      <p>
+        <strong>Description:</strong> {settlement.description || "—"}
       </p>
 
-      <hr />
-
-      <h3>Take Action</h3>
-      <label>
-        <input
-          type="radio"
-          checked={confirm === true}
-          onChange={() => setConfirm(true)}
-        />
-        Confirm
-      </label>
-      <label style={{ marginLeft: 12 }}>
-        <input
-          type="radio"
-          checked={confirm === false}
-          onChange={() => setConfirm(false)}
-        />
-        Dispute
-      </label>
-
-      {!confirm && (
-        <div style={{ marginTop: 8 }}>
-          <input
-            type="text"
-            placeholder="Reason for dispute"
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            style={{ width: "100%", padding: 8 }}
-          />
+      {fullyConfirmed ? (
+        <div
+          style={{
+            marginTop: 20,
+            padding: 12,
+            border: "1px solid #28a745",
+            borderRadius: 6,
+            background: "#f6fffa",
+          }}
+        >
+          <h3 style={{ color: "#28a745" }}>✅ Settlement Fully Confirmed</h3>
+          <p>
+            <strong>Confirmed By Payer:</strong>{" "}
+            {settlement.confirmationStatus?.confirmedByPayer ? "Yes" : "No"}
+          </p>
+          <p>
+            <strong>Confirmed By Receiver:</strong>{" "}
+            {settlement.confirmationStatus?.confirmedByReceiver ? "Yes" : "No"}
+          </p>
+          <p>
+            <strong>Confirmed At:</strong>{" "}
+            {settlement.dates?.confirmedAt
+              ? new Date(settlement.dates.confirmedAt).toLocaleString()
+              : "-"}
+          </p>
         </div>
-      )}
+      ) : canTakeAction ? (
+        <div style={{ marginTop: 20 }}>
+          <h3>Take Action</h3>
+          <label>
+            <input
+              type="radio"
+              checked={confirm === true}
+              onChange={() => setConfirm(true)}
+            />
+            Confirm
+          </label>
+          <label style={{ marginLeft: 12 }}>
+            <input
+              type="radio"
+              checked={confirm === false}
+              onChange={() => setConfirm(false)}
+            />
+            Dispute
+          </label>
 
-      <button
-        onClick={handleConfirmAction}
-        disabled={actionLoading}
-        style={{
-          marginTop: 12,
-          padding: "8px 14px",
-          background: confirm ? "#28a745" : "#dc3545",
-          color: "white",
-          border: "none",
-          borderRadius: 6,
-          cursor: "pointer",
-        }}
-      >
-        {actionLoading
-          ? "Processing..."
-          : confirm
-          ? "Confirm Settlement"
-          : "Dispute Settlement"}
-      </button>
+          {!confirm && (
+            <div style={{ marginTop: 8 }}>
+              <input
+                type="text"
+                placeholder="Reason for dispute"
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                style={{ width: "100%", padding: 8 }}
+              />
+            </div>
+          )}
+
+          <button
+            onClick={handleConfirmAction}
+            disabled={actionLoading}
+            style={{
+              marginTop: 12,
+              padding: "8px 14px",
+              background: confirm ? "#28a745" : "#dc3545",
+              color: "white",
+              border: "none",
+              borderRadius: 6,
+              cursor: "pointer",
+            }}
+          >
+            {actionLoading
+              ? "Processing..."
+              : confirm
+              ? "Confirm Settlement"
+              : "Dispute Settlement"}
+          </button>
+        </div>
+      ) : (
+        <p style={{ marginTop: 20, color: "#6c757d" }}>
+          No further actions available for this settlement.
+        </p>
+      )}
     </div>
   );
 }

@@ -26,7 +26,7 @@ router.post(
 // =====================================================
 
 // PUT /api/settlements/:id/confirm - Confirm or dispute a settlement
-router.put("/settlements/:id/confirm", authenticate, confirmSettlement);
+router.put("/:id/confirm", authenticate, confirmSettlement);
 
 // =====================================================
 // SETTLEMENT HISTORY & DETAILS ROUTES

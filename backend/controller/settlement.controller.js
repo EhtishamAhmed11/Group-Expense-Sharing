@@ -273,109 +273,259 @@ export const settleDebt = async (req, res) => {
 };
 
 export const confirmSettlement = async (req, res) => {
-  const client = await pool.connect();
-  try {
-    const { settlementId } = req.params;
-    const { confirm, disputeReason } = req.body;
-    const userId = req.user.id;
+  let client;
 
+  try {
+    const { id: settlementId } = req.params;
+    const { confirm = true, disputeReason = null } = req.body;
+    const userId = req.userId;
+
+    if (!settlementId) {
+      return res.status(400).json({
+        success: false,
+        message: "Settlement ID is required",
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    client = await pool.connect();
     await client.query("BEGIN");
 
-    const settlementResult = await client.query(
-      `SELECT * FROM settlements WHERE id = $1`,
-      [settlementId]
-    );
+    const getSettlementQuery = `
+      SELECT 
+        s.id,
+        s.from_user_id,
+        s.to_user_id,
+        s.amount,
+        s.group_id,
+        s.description,
+        s.status,
+        s.confirmed_by_payer,
+        s.confirmed_by_receiver,
+        s.confirmed_at,
+        s.created_at,
+        from_user.first_name || ' ' || from_user.last_name AS payer_name,
+        to_user.first_name || ' ' || to_user.last_name AS receiver_name,
+        CASE 
+          WHEN s.from_user_id = $1 THEN 'payer'
+          WHEN s.to_user_id = $1 THEN 'receiver'
+          ELSE 'none'
+        END AS user_role
+      FROM settlements s
+      JOIN users from_user ON s.from_user_id = from_user.id
+      JOIN users to_user ON s.to_user_id = to_user.id
+      WHERE s.id = $2
+    `;
+
+    const settlementResult = await client.query(getSettlementQuery, [
+      userId,
+      settlementId,
+    ]);
+
     if (settlementResult.rows.length === 0) {
       await client.query("ROLLBACK");
-      return res
-        .status(404)
-        .json({ success: false, message: "Settlement not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Settlement not found",
+        timestamp: new Date().toISOString(),
+      });
     }
+
     const settlement = settlementResult.rows[0];
-    if (![settlement.from_user_id, settlement.to_user_id].includes(userId)) {
+
+    if (settlement.user_role === "none") {
       await client.query("ROLLBACK");
-      return res
-        .status(403)
-        .json({ success: false, message: "Not authorized" });
+      return res.status(403).json({
+        success: false,
+        message: "You are not authorized to confirm this settlement",
+        timestamp: new Date().toISOString(),
+      });
     }
-    if (settlement.status === "confirmed" || settlement.status === "disputed") {
+
+    if (
+      settlement.status === "confirmed" &&
+      settlement.confirmed_by_payer &&
+      settlement.confirmed_by_receiver
+    ) {
+      return res.status(200).json({
+        success: true,
+        message: "Settlement already confirmed by both parties",
+        data: {
+          settlement: {
+            id: settlement.id,
+            status: settlement.status,
+            confirmedAt: settlement.confirmed_at,
+          },
+        },
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    if (settlement.status === "disputed") {
       await client.query("ROLLBACK");
-      return res
-        .status(400)
-        .json({ success: false, message: "Already finalized" });
+      return res.status(400).json({
+        success: false,
+        message:
+          "Cannot modify disputed settlement. Please resolve dispute first",
+        timestamp: new Date().toISOString(),
+      });
     }
 
-    let confirmedByPayer = settlement.confirmed_by_payer;
-    let confirmedByReceiver = settlement.confirmed_by_receiver;
-    let newStatus = "pending";
-    let confirmedAt = null;
+    let updateQuery;
+    let updateParams;
 
-    if (!confirm) {
-      newStatus = "disputed";
-      await client.query(
-        `UPDATE settlements
-         SET status = $1, dispute_reason = $2, updated_at = NOW()
-         WHERE id = $3`,
-        [newStatus, disputeReason || null, settlementId]
-      );
-      await client.query("COMMIT");
-      return res.json({ success: true, message: "Settlement disputed" });
+    if (confirm) {
+      if (settlement.user_role === "payer") {
+        updateQuery = `
+          UPDATE settlements 
+          SET confirmed_by_payer = true,
+              updated_at = CURRENT_TIMESTAMP,
+              confirmed_at = CASE 
+                WHEN confirmed_by_receiver = true THEN CURRENT_TIMESTAMP
+                ELSE confirmed_at
+              END,
+              status = CASE 
+                WHEN confirmed_by_receiver = true THEN 'confirmed'
+                ELSE 'pending'
+              END
+          WHERE id = $1
+          RETURNING status, confirmed_by_payer, confirmed_by_receiver, confirmed_at
+        `;
+      } else {
+        updateQuery = `
+          UPDATE settlements 
+          SET confirmed_by_receiver = true,
+              updated_at = CURRENT_TIMESTAMP,
+              confirmed_at = CASE 
+                WHEN confirmed_by_payer = true THEN CURRENT_TIMESTAMP
+                ELSE confirmed_at
+              END,
+              status = CASE 
+                WHEN confirmed_by_payer = true THEN 'confirmed'
+                ELSE 'pending'
+              END
+          WHERE id = $1
+          RETURNING status, confirmed_by_payer, confirmed_by_receiver, confirmed_at
+        `;
+      }
+      updateParams = [settlementId];
+    } else {
+      updateQuery = `
+        UPDATE settlements 
+        SET status = 'disputed',
+            description = COALESCE(description, '') || ' [DISPUTED: ' || $2 || ']',
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = $1
+        RETURNING status, confirmed_by_payer, confirmed_by_receiver, confirmed_at
+      `;
+      updateParams = [settlementId, disputeReason || "No reason provided"];
     }
 
-    if (userId === settlement.from_user_id) {
-      confirmedByPayer = true;
-    }
-    if (userId === settlement.to_user_id) {
-      confirmedByReceiver = true;
-    }
+    const updateResult = await client.query(updateQuery, updateParams);
+    const updatedSettlement = updateResult.rows[0];
 
-    if (confirmedByPayer && confirmedByReceiver) {
-      newStatus = "confirmed";
-      confirmedAt = new Date();
-    }
+    if (updatedSettlement.status === "confirmed") {
+      const updateExpenseParticipantsQuery = `
+        UPDATE expense_participants 
+        SET is_settle = true 
+        WHERE expense_id IN (
+          SELECT DISTINCT e.id
+          FROM expenses e
+          WHERE e.paid_by = $1 
+            AND e.group_id = $2
+            AND e.expense_type = 'group'
+            AND EXISTS (
+              SELECT 1 FROM expense_participants ep 
+              WHERE ep.expense_id = e.id 
+                AND ep.user_id = $3 
+                AND ep.is_settle = false
+            )
+        ) AND user_id = $3
+      `;
 
-    const updateRes = await client.query(
-      `UPDATE settlements
-       SET confirmed_by_payer = $1,
-           confirmed_by_receiver = $2,
-           status = $3,
-           confirmed_at = $4,
-           updated_at = NOW()
-       WHERE id = $5
-       RETURNING *`,
-      [
-        confirmedByPayer,
-        confirmedByReceiver,
-        newStatus,
-        confirmedAt,
-        settlementId,
-      ]
-    );
+      await client.query(updateExpenseParticipantsQuery, [
+        settlement.to_user_id,
+        settlement.group_id,
+        settlement.from_user_id,
+      ]);
 
-    if (newStatus === "confirmed") {
-      await client.query(
-        `UPDATE expense_participants
-         SET is_settled = true
-         WHERE user_id = $1
-           AND expense_id IN (
-             SELECT id FROM expenses WHERE group_id = $2
-           )`,
-        [settlement.from_user_id, settlement.group_id]
-      );
+      const checkFullySettledQuery = `
+        UPDATE expenses 
+        SET is_settled = true
+        WHERE id IN (
+          SELECT e.id
+          FROM expenses e
+          WHERE e.group_id = $1
+            AND e.expense_type = 'group'
+            AND NOT EXISTS (
+              SELECT 1 FROM expense_participants ep
+              WHERE ep.expense_id = e.id AND ep.is_settle = false
+            )
+            AND e.is_settled = false
+        )
+      `;
+      await client.query(checkFullySettledQuery, [settlement.group_id]);
     }
 
     await client.query("COMMIT");
-    res.json({
+
+    try {
+      await cacheService.invalidateDebtCaches([
+        settlement.from_user_id,
+        settlement.to_user_id,
+      ]);
+    } catch (cacheError) {
+      console.log(`Debt cache invalidation error: ${cacheError.message}`);
+    }
+
+    const responseMessage = confirm
+      ? updatedSettlement.status === "confirmed"
+        ? "Settlement confirmed by both parties and applied to expenses"
+        : `Settlement confirmed by ${settlement.user_role}. Waiting for other party confirmation`
+      : "Settlement disputed. Please contact the other party to resolve";
+
+    res.status(200).json({
       success: true,
-      message: "Settlement updated",
-      data: updateRes.rows[0],
+      message: responseMessage,
+      data: {
+        settlement: {
+          id: settlement.id,
+          amount: parseFloat(settlement.amount),
+          status: updatedSettlement.status,
+          confirmedByPayer: updatedSettlement.confirmed_by_payer,
+          confirmedByReceiver: updatedSettlement.confirmed_by_receiver,
+          confirmedAt: updatedSettlement.confirmed_at,
+          userRole: settlement.user_role,
+          fullyConfirmed: updatedSettlement.status === "confirmed",
+          disputed: updatedSettlement.status === "disputed",
+        },
+      },
+      timestamp: new Date().toISOString(),
     });
-  } catch (err) {
-    await client.query("ROLLBACK");
-    console.error("Error confirming settlement:", err);
-    res.status(500).json({ success: false, message: "Server error" });
+  } catch (error) {
+    if (client) {
+      try {
+        await client.query("ROLLBACK");
+      } catch (rollbackError) {
+        console.error("Error rolling back transaction:", rollbackError);
+      }
+    }
+
+    console.error(`Error in confirmSettlement: ${error.message}`, {
+      settlementId: req.params.id,
+      userId: req.userId,
+      confirm: req.body.confirm,
+      stack: error.stack,
+    });
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to process settlement confirmation",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+      timestamp: new Date().toISOString(),
+    });
   } finally {
-    client.release();
+    if (client) client.release();
   }
 };
 
