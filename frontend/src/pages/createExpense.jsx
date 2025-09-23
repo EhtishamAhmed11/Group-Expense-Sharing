@@ -64,49 +64,52 @@ const CreateExpense = () => {
       }
     } catch (err) {
       console.error("Error creating expense:", err);
-      const errorMsg = "Something went wrong";
-      setError(errorMsg);
-      toast.error(errorMsg);
+      setError("Something went wrong");
+      toast.error("Something went wrong");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <Container maxWidth="md" className="py-8">
-      <Box className="mb-6">
-        <Button
-          startIcon={<ArrowLeft className="w-4 h-4" />}
-          onClick={() => navigate(-1)}
-          className="mb-4 text-gray-600"
-          sx={{ textTransform: "none" }}
-        >
-          Back
-        </Button>
+    <Container maxWidth="sm" className="py-10">
+      {/* Back Button */}
+      <Button
+        startIcon={<ArrowLeft />}
+        onClick={() => navigate(-1)}
+        className="mb-6 text-gray-600 hover:text-gray-900 transition-colors duration-200"
+        sx={{ textTransform: "none" }}
+      >
+        Back
+      </Button>
 
-        <Typography variant="h4" className="font-bold text-gray-900 mb-2">
-          Create New Expense
-        </Typography>
-        <Typography variant="body2" className="text-gray-600">
-          Add a new expense to group {groupId}
-        </Typography>
-      </Box>
+      {/* Page Title */}
+      <Typography variant="h4" className="font-bold text-gray-900 mb-2">
+        Create New Expense
+      </Typography>
+      <Typography variant="body2" className="text-gray-600 mb-6">
+        Add a new expense to group <strong>{groupId}</strong>
+      </Typography>
 
-      <Card className="shadow-lg rounded-2xl border-0">
-        <CardHeader className="pb-4">
-          <Typography variant="h6" className="font-semibold">
-            Expense Details
-          </Typography>
-        </CardHeader>
+      {/* Card */}
+      <Card className="rounded-3xl shadow-xl border-0 hover:shadow-2xl transition-shadow duration-300">
+        <CardHeader
+          className="bg-blue-50 px-6 py-4"
+          title={
+            <Typography variant="h6" className="font-semibold text-blue-700">
+              Expense Details
+            </Typography>
+          }
+        />
 
-        <CardContent className="space-y-6">
+        <CardContent className="p-6 space-y-6">
           {error && (
             <Alert severity="error" className="rounded-lg">
               {error}
             </Alert>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-5">
             <TextField
               fullWidth
               label="Amount"
@@ -119,9 +122,15 @@ const CreateExpense = () => {
                   <DollarSign className="w-4 h-4 mr-2 text-gray-500" />
                 ),
               }}
-              className="bg-gray-50"
-              variant="outlined"
               placeholder="0.00"
+              variant="outlined"
+              className="bg-gray-50 rounded-lg"
+              sx={{
+                "& .MuiOutlinedInput-root": {
+                  "&:hover fieldset": { borderColor: "rgb(37, 99, 235)" },
+                  "&.Mui-focused fieldset": { borderColor: "rgb(37, 99, 235)" },
+                },
+              }}
             />
 
             <TextField
@@ -135,9 +144,15 @@ const CreateExpense = () => {
                   <FileText className="w-4 h-4 mr-2 text-gray-500" />
                 ),
               }}
-              className="bg-gray-50"
-              variant="outlined"
               placeholder="What was this expense for?"
+              variant="outlined"
+              className="bg-gray-50 rounded-lg"
+              sx={{
+                "& .MuiOutlinedInput-root": {
+                  "&:hover fieldset": { borderColor: "rgb(37, 99, 235)" },
+                  "&.Mui-focused fieldset": { borderColor: "rgb(37, 99, 235)" },
+                },
+              }}
             />
 
             <TextField
@@ -148,9 +163,15 @@ const CreateExpense = () => {
               InputProps={{
                 startAdornment: <Tag className="w-4 h-4 mr-2 text-gray-500" />,
               }}
-              className="bg-gray-50"
-              variant="outlined"
               placeholder="e.g., Food, Transport, Entertainment"
+              variant="outlined"
+              className="bg-gray-50 rounded-lg"
+              sx={{
+                "& .MuiOutlinedInput-root": {
+                  "&:hover fieldset": { borderColor: "rgb(37, 99, 235)" },
+                  "&.Mui-focused fieldset": { borderColor: "rgb(37, 99, 235)" },
+                },
+              }}
             />
 
             <Box className="flex gap-3 pt-4">
@@ -158,7 +179,7 @@ const CreateExpense = () => {
                 type="button"
                 variant="outlined"
                 onClick={() => navigate(-1)}
-                className="flex-1"
+                className="flex-1 border-gray-300 text-gray-700 hover:bg-gray-50 transition-all duration-200"
                 sx={{ textTransform: "none" }}
               >
                 Cancel
@@ -168,22 +189,20 @@ const CreateExpense = () => {
                 type="submit"
                 variant="contained"
                 disabled={loading}
-                className="flex-1 bg-blue-600 hover:bg-blue-700"
+                className="flex-1 bg-blue-600 hover:bg-blue-700 transition-all duration-200"
                 sx={{
                   textTransform: "none",
-                  backgroundColor: "rgb(37, 99, 235)",
-                  "&:hover": {
-                    backgroundColor: "rgb(29, 78, 216)",
-                  },
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontWeight: 500,
                 }}
-                startIcon={
-                  loading ? (
-                    <CircularProgress size={18} color="inherit" />
-                  ) : (
-                    <DollarSign className="w-4 h-4" />
-                  )
-                }
               >
+                {loading ? (
+                  <CircularProgress size={20} color="inherit" />
+                ) : (
+                  <DollarSign className="w-4 h-4 mr-2" />
+                )}
                 {loading ? "Creating..." : "Create Expense"}
               </Button>
             </Box>
