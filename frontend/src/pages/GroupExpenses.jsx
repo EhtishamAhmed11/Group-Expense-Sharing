@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import {
@@ -14,20 +14,19 @@ import {
   Chip,
   CircularProgress,
   Box,
-  Divider,
   Pagination,
-  Avatar,
 } from "@mui/material";
 import {
   Plus,
   Search,
-  Filter,
   DollarSign,
   Users,
   User,
   Calendar,
   Tag,
 } from "lucide-react";
+import { format } from "date-fns";
+import { motion } from "framer-motion";
 
 import toast from "react-hot-toast";
 
@@ -282,69 +281,76 @@ const GroupExpenses = () => {
 
           {/* Expense List */}
           {expenses.map((exp) => (
-            <Card key={exp.expense_id} className="mb-4 shadow-sm">
-              <CardHeader
-                title={
-                  <Box className="flex items-center justify-between">
-                    <Typography variant="h6" className="font-semibold">
-                      {exp.description}
-                    </Typography>
-                    <Typography
-                      variant="h6"
-                      className="font-bold text-green-600"
-                    >
-                      ${exp.amount}
-                    </Typography>
-                  </Box>
-                }
-                subheader={
-                  <Box className="flex flex-wrap gap-3 mt-2 items-center">
-                    <Chip
-                      icon={<Tag className="w-4 h-4" />}
-                      label={exp.category_name || "No Category"}
-                      size="small"
-                      variant="outlined"
-                    />
-                    <Chip
-                      icon={<User className="w-4 h-4" />}
-                      label={`Paid by: ${exp.payer_first_name} ${exp.payer_last_name}`}
-                      size="small"
-                      color={exp.paid_by === user.id ? "success" : "default"}
-                    />
-                    <Chip
-                      icon={<Calendar className="w-4 h-4" />}
-                      label={new Date(exp.expense_date).toLocaleDateString()}
-                      size="small"
-                    />
-                    <Chip
-                      icon={<DollarSign className="w-4 h-4" />}
-                      label={exp.is_settled ? "Settled" : "Pending"}
-                      size="small"
-                      color={exp.is_settled ? "success" : "warning"}
-                    />
-                    {exp.split_type && (
+            <motion.div
+              key={exp.expense_id}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              <Card className="mb-4 shadow-sm">
+                <CardHeader
+                  title={
+                    <Box className="flex items-center justify-between">
+                      <Typography variant="h6" className="font-semibold">
+                        {exp.description}
+                      </Typography>
+                      <Typography
+                        variant="h6"
+                        className="font-bold text-green-600"
+                      >
+                        ${exp.amount}
+                      </Typography>
+                    </Box>
+                  }
+                  subheader={
+                    <Box className="flex flex-wrap gap-3 mt-2 items-center">
                       <Chip
-                        label={`Split: ${exp.split_type}`}
+                        icon={<Tag className="w-4 h-4" />}
+                        label={exp.category_name || "No Category"}
                         size="small"
                         variant="outlined"
                       />
-                    )}
-                  </Box>
-                }
-              />
-              <CardContent>
-                {exp.notes && (
-                  <Typography variant="body2" className="text-gray-600 mb-2">
-                    Notes: {exp.notes}
-                  </Typography>
-                )}
-                {exp.category_description && (
-                  <Typography variant="body2" className="text-gray-500">
-                    Category Details: {exp.category_description}
-                  </Typography>
-                )}
-              </CardContent>
-            </Card>
+                      <Chip
+                        icon={<User className="w-4 h-4" />}
+                        label={`Paid by: ${exp.payer_first_name} ${exp.payer_last_name}`}
+                        size="small"
+                        color={exp.paid_by === user.id ? "success" : "default"}
+                      />
+                      <Chip
+                        icon={<Calendar className="w-4 h-4" />}
+                        label={format(new Date(exp.expense_date), "PP")}
+                        size="small"
+                      />
+                      <Chip
+                        icon={<DollarSign className="w-4 h-4" />}
+                        label={exp.is_settled ? "Settled" : "Pending"}
+                        size="small"
+                        color={exp.is_settled ? "success" : "warning"}
+                      />
+                      {exp.split_type && (
+                        <Chip
+                          label={`Split: ${exp.split_type}`}
+                          size="small"
+                          variant="outlined"
+                        />
+                      )}
+                    </Box>
+                  }
+                />
+                <CardContent>
+                  {exp.notes && (
+                    <Typography variant="body2" className="text-gray-600 mb-2">
+                      Notes: {exp.notes}
+                    </Typography>
+                  )}
+                  {exp.category_description && (
+                    <Typography variant="body2" className="text-gray-500">
+                      Category Details: {exp.category_description}
+                    </Typography>
+                  )}
+                </CardContent>
+              </Card>
+            </motion.div>
           ))}
 
           {/* Pagination */}

@@ -16,6 +16,8 @@ import {
   Container,
   Divider,
 } from "@mui/material";
+import { InputAdornment } from "@mui/material";
+import { motion } from "framer-motion";
 import {
   ArrowLeft,
   DollarSign,
@@ -106,7 +108,13 @@ export default function CreateSettlement() {
         </Typography>
       </Box>
 
-      <Card className="shadow-lg rounded-2xl border-0">
+      <Card
+        component={motion.div}
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.25, ease: "easeOut" }}
+        className="shadow-lg rounded-2xl border-0"
+      >
         <CardHeader className="pb-4">
           <Box className="flex items-center space-x-2">
             <CheckCircle className="w-5 h-5 text-green-600" />
@@ -134,7 +142,9 @@ export default function CreateSettlement() {
                 fullWidth
                 InputProps={{
                   startAdornment: (
-                    <Users className="w-4 h-4 mr-2 text-gray-500" />
+                    <InputAdornment position="start">
+                      <Users className="w-4 h-4 text-gray-500" />
+                    </InputAdornment>
                   ),
                 }}
                 className="bg-gray-50"
@@ -151,7 +161,9 @@ export default function CreateSettlement() {
                 fullWidth
                 InputProps={{
                   startAdornment: (
-                    <User className="w-4 h-4 mr-2 text-gray-500" />
+                    <InputAdornment position="start">
+                      <User className="w-4 h-4 text-gray-500" />
+                    </InputAdornment>
                   ),
                 }}
                 className="bg-gray-50"
@@ -170,7 +182,9 @@ export default function CreateSettlement() {
               fullWidth
               InputProps={{
                 startAdornment: (
-                  <DollarSign className="w-4 h-4 mr-2 text-gray-500" />
+                  <InputAdornment position="start">
+                    <DollarSign className="w-4 h-4 text-gray-500" />
+                  </InputAdornment>
                 ),
               }}
               className="bg-gray-50"
@@ -189,7 +203,9 @@ export default function CreateSettlement() {
               rows={3}
               InputProps={{
                 startAdornment: (
-                  <FileText className="w-4 h-4 mr-2 text-gray-500 self-start mt-3" />
+                  <InputAdornment position="start">
+                    <FileText className="w-4 h-4 text-gray-500 self-start mt-3" />
+                  </InputAdornment>
                 ),
               }}
               className="bg-gray-50"

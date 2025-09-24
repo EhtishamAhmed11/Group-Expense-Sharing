@@ -18,6 +18,8 @@ import {
 } from "@mui/material";
 import { ArrowLeft, DollarSign, FileText, Tag } from "lucide-react";
 import { toast } from "react-hot-toast";
+import { InputAdornment } from "@mui/material";
+import { motion } from "framer-motion";
 
 const CreateExpense = () => {
   const { groupId } = useParams();
@@ -92,7 +94,13 @@ const CreateExpense = () => {
       </Typography>
 
       {/* Card */}
-      <Card className="rounded-3xl shadow-xl border-0 hover:shadow-2xl transition-shadow duration-300">
+      <Card
+        component={motion.div}
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.25, ease: "easeOut" }}
+        className="rounded-3xl shadow-xl border-0 hover:shadow-2xl transition-shadow duration-300"
+      >
         <CardHeader
           className="bg-blue-50 px-6 py-4"
           title={
@@ -119,7 +127,9 @@ const CreateExpense = () => {
               required
               InputProps={{
                 startAdornment: (
-                  <DollarSign className="w-4 h-4 mr-2 text-gray-500" />
+                  <InputAdornment position="start">
+                    <DollarSign className="w-4 h-4 text-gray-500" />
+                  </InputAdornment>
                 ),
               }}
               placeholder="0.00"
@@ -141,7 +151,9 @@ const CreateExpense = () => {
               required
               InputProps={{
                 startAdornment: (
-                  <FileText className="w-4 h-4 mr-2 text-gray-500" />
+                  <InputAdornment position="start">
+                    <FileText className="w-4 h-4 text-gray-500" />
+                  </InputAdornment>
                 ),
               }}
               placeholder="What was this expense for?"
@@ -161,7 +173,11 @@ const CreateExpense = () => {
               value={category}
               onChange={(e) => setCategory(e.target.value)}
               InputProps={{
-                startAdornment: <Tag className="w-4 h-4 mr-2 text-gray-500" />,
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Tag className="w-4 h-4 text-gray-500" />
+                  </InputAdornment>
+                ),
               }}
               placeholder="e.g., Food, Transport, Entertainment"
               variant="outlined"

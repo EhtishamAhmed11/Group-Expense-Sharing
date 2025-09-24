@@ -1,4 +1,6 @@
-import React, { useState, useEffect } from "react";
+"use client";
+
+import { useState, useEffect } from "react";
 import {
   BrowserRouter as Router,
   Routes,
@@ -17,6 +19,7 @@ import CreateExpense from "./pages/createExpense";
 import DebtSummary from "./pages/DebtSummary";
 import DetailedDebts from "./pages/DetailedDebts";
 import Navbar from "./components/Navbar";
+import { ThemeProvider, CssBaseline, createTheme } from "@mui/material";
 
 // ✅ Import new settlement pages
 import SettleDebt from "./pages/SettleDebt";
@@ -24,6 +27,17 @@ import ConfirmSettlement from "./pages/ConfirmSettlement";
 import SettlementHistory from "./pages/SettlementHistory";
 import SettlementDetails from "./pages/SettlementDetails";
 import CreateSettlement from "./pages/CreateSettlement";
+
+const theme = createTheme({
+  palette: {
+    primary: { main: "#2563eb" }, // Tailwind blue-600
+    secondary: { main: "#0ea5e9" }, // sky-500
+    success: { main: "#16a34a" }, // green-600
+    warning: { main: "#f59e0b" }, // amber-500
+    error: { main: "#dc2626" }, // red-600
+    background: { default: "#f9fafb" }, // gray-50
+  },
+});
 
 // Protected Route wrapper
 const ProtectedRoute = ({ children }) => {
@@ -210,13 +224,16 @@ const AppContent = () => {
 // Main App Component
 const App = () => {
   return (
-    <AuthProvider>
-      <Router>
-        <div style={{ fontFamily: "Arial, sans-serif" }}>
-          <AppContent />
-        </div>
-      </Router>
-    </AuthProvider>
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <AuthProvider>
+        <Router>
+          <div style={{ fontFamily: "Arial, sans-serif" }}>
+            <AppContent />
+          </div>
+        </Router>
+      </AuthProvider>
+    </ThemeProvider>
   );
 };
 

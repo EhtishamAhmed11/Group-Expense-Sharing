@@ -1,3 +1,5 @@
+"use client";
+
 import {
   BarChart,
   Bar,
@@ -10,6 +12,7 @@ import {
 } from "recharts";
 import { Card, CardContent, CardHeader, Typography, Box } from "@mui/material";
 import { TrendingUp, TrendingDown } from "lucide-react";
+import { motion } from "framer-motion";
 
 /*
   Props:
@@ -20,13 +23,21 @@ import { TrendingUp, TrendingDown } from "lucide-react";
 export default function DebtChart({ netBalances = [] }) {
   if (!Array.isArray(netBalances) || netBalances.length === 0) {
     return (
-      <Card className="rounded-xl shadow-sm">
-        <CardContent className="flex items-center justify-center py-12">
-          <Typography variant="body2" className="text-gray-500">
-            No data available for chart
-          </Typography>
-        </CardContent>
-      </Card>
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, amount: 0.2 }}
+        whileHover={{ y: -2 }}
+        transition={{ duration: 0.25, ease: "easeOut" }}
+      >
+        <Card className="rounded-xl shadow-sm">
+          <CardContent className="flex items-center justify-center py-12">
+            <Typography variant="body2" className="text-gray-500">
+              No data available for chart
+            </Typography>
+          </CardContent>
+        </Card>
+      </motion.div>
     );
   }
 
@@ -58,57 +69,65 @@ export default function DebtChart({ netBalances = [] }) {
   };
 
   return (
-    <Card className="rounded-xl shadow-sm">
-      <CardHeader className="pb-2">
-        <Box className="flex items-center justify-between">
-          <Typography variant="h6" className="font-semibold">
-            Net Balances
-          </Typography>
-          <Box className="flex items-center space-x-4 text-sm">
-            <Box className="flex items-center space-x-1">
-              <TrendingUp className="w-4 h-4 text-green-600" />
-              <span className="text-green-600">You're owed</span>
-            </Box>
-            <Box className="flex items-center space-x-1">
-              <TrendingDown className="w-4 h-4 text-red-600" />
-              <span className="text-red-600">You owe</span>
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, amount: 0.2 }}
+      whileHover={{ y: -2 }}
+      transition={{ duration: 0.25, ease: "easeOut" }}
+    >
+      <Card className="rounded-xl shadow-sm">
+        <CardHeader className="pb-2">
+          <Box className="flex items-center justify-between">
+            <Typography variant="h6" className="font-semibold">
+              Net Balances
+            </Typography>
+            <Box className="flex items-center space-x-4 text-sm">
+              <Box className="flex items-center space-x-1">
+                <TrendingUp className="w-4 h-4 text-green-600" />
+                <span className="text-green-600">You're owed</span>
+              </Box>
+              <Box className="flex items-center space-x-1">
+                <TrendingDown className="w-4 h-4 text-red-600" />
+                <span className="text-red-600">You owe</span>
+              </Box>
             </Box>
           </Box>
-        </Box>
-      </CardHeader>
+        </CardHeader>
 
-      <CardContent>
-        <ResponsiveContainer width="100%" height={300}>
-          <BarChart
-            data={chartData}
-            margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
-          >
-            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-            <XAxis
-              dataKey="name"
-              angle={-45}
-              textAnchor="end"
-              height={80}
-              fontSize={12}
-              stroke="#666"
-            />
-            <YAxis
-              fontSize={12}
-              stroke="#666"
-              tickFormatter={(value) => `$${value}`}
-            />
-            <Tooltip content={<CustomTooltip />} />
-            <Bar dataKey="amount" radius={[4, 4, 0, 0]}>
-              {chartData.map((entry, index) => (
-                <Cell
-                  key={`cell-${index}`}
-                  fill={entry.isPositive ? "#10b981" : "#ef4444"}
-                />
-              ))}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
-      </CardContent>
-    </Card>
+        <CardContent>
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart
+              data={chartData}
+              margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+              <XAxis
+                dataKey="name"
+                angle={-45}
+                textAnchor="end"
+                height={80}
+                fontSize={12}
+                stroke="#666"
+              />
+              <YAxis
+                fontSize={12}
+                stroke="#666"
+                tickFormatter={(value) => `$${value}`}
+              />
+              <Tooltip content={<CustomTooltip />} />
+              <Bar dataKey="amount" radius={[4, 4, 0, 0]}>
+                {chartData.map((entry, index) => (
+                  <Cell
+                    key={`cell-${index}`}
+                    fill={entry.isPositive ? "#10b981" : "#ef4444"}
+                  />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
+    </motion.div>
   );
 }

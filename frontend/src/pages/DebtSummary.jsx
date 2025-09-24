@@ -28,6 +28,8 @@ import {
   DollarSign,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
+import { motion } from "framer-motion";
+import { format, parseISO, isValid } from "date-fns";
 
 import {
   ResponsiveContainer,
@@ -235,100 +237,119 @@ export default function DebtSummary() {
                 ) : (
                   <Box display="flex" flexDirection="column" gap={3}>
                     {groupBalances.map((g) => (
-                      <Card
+                      <motion.div
                         key={g.groupId}
-                        variant="outlined"
-                        className="rounded-lg w-full"
+                        layout
+                        initial={{ opacity: 0, y: 6 }}
+                        whileInView={{ opacity: 1, y: 0 }}
+                        viewport={{ once: true, amount: 0.2 }}
+                        whileHover={{ y: -2 }}
+                        transition={{ duration: 0.22, ease: "easeOut" }}
                       >
-                        <CardContent>
-                          <Box
-                            display="flex"
-                            justifyContent="space-between"
-                            alignItems="center"
-                          >
-                            <Box flex={1}>
-                              <Typography
-                                variant="h6"
-                                className="font-semibold mb-1"
-                              >
-                                {g.groupName}
-                              </Typography>
-                              {g.groupDescription && (
+                        <Card variant="outlined" className="rounded-lg w-full">
+                          <CardContent>
+                            <Box
+                              display="flex"
+                              justifyContent="space-between"
+                              alignItems="center"
+                            >
+                              <Box flex={1}>
                                 <Typography
-                                  variant="body2"
-                                  className="text-gray-600 mb-2"
+                                  variant="h6"
+                                  className="font-semibold mb-1"
                                 >
-                                  {g.groupDescription}
+                                  {g.groupName}
                                 </Typography>
-                              )}
-                              <Box className="flex items-center space-x-4 text-sm text-gray-500">
-                                <span>
-                                  Unsettled: {g.unsettledExpensesCount}
-                                </span>
-                                <Box className="flex items-center space-x-1">
-                                  <Calendar className="w-4 h-4" />
+                                {g.groupDescription && (
+                                  <Typography
+                                    variant="body2"
+                                    className="text-gray-600 mb-2"
+                                  >
+                                    {g.groupDescription}
+                                  </Typography>
+                                )}
+                                <Box className="flex items-center space-x-4 text-sm text-gray-500">
                                   <span>
-                                    Last:{" "}
-                                    {g.lastExpenseDate
-                                      ? g.lastExpenseDate.split("T")[0]
-                                      : "-"}
+                                    Unsettled: {g.unsettledExpensesCount}
                                   </span>
+                                  <Box className="flex items-center space-x-1">
+                                    <Calendar className="w-4 h-4" />
+                                    <span>
+                                      Last:{" "}
+                                      {g.lastExpenseDate
+                                        ? (() => {
+                                            const d = parseISO(
+                                              g.lastExpenseDate
+                                            );
+                                            return isValid(d)
+                                              ? format(d, "yyyy-MM-dd")
+                                              : "-";
+                                          })()
+                                        : "-"}
+                                    </span>
+                                  </Box>
+                                </Box>
+                              </Box>
+
+                              <Box textAlign="right" ml={4}>
+                                <Typography
+                                  variant="h6"
+                                  className={`font-bold ${
+                                    g.netBalance >= 0
+                                      ? "text-green-600"
+                                      : "text-red-600"
+                                  }`}
+                                >
+                                  ${g.netBalance.toFixed(2)}
+                                </Typography>
+                                <Chip
+                                  label={
+                                    g.netBalance >= 0
+                                      ? "You're owed"
+                                      : "You owe"
+                                  }
+                                  size="small"
+                                  color={
+                                    g.netBalance >= 0 ? "success" : "error"
+                                  }
+                                  variant="outlined"
+                                  className="mb-3"
+                                />
+                                <Box className="flex space-x-2">
+                                  <Button
+                                    size="small"
+                                    variant="outlined"
+                                    startIcon={<Eye className="w-4 h-4" />}
+                                    onClick={() => openDetailed(g.groupId)}
+                                    sx={{ textTransform: "none" }}
+                                  >
+                                    View
+                                  </Button>
+                                  <Button
+                                    size="small"
+                                    variant="contained"
+                                    startIcon={
+                                      <Handshake className="w-4 h-4" />
+                                    }
+                                    onClick={() =>
+                                      navigate(
+                                        `/settlements/create?groupId=${g.groupId}`
+                                      )
+                                    }
+                                    sx={{
+                                      textTransform: "none",
+                                      backgroundColor: "#22c55e",
+                                      "&:hover": { backgroundColor: "#166534" },
+                                    }}
+                                  >
+                                    Settle
+                                  </Button>
                                 </Box>
                               </Box>
                             </Box>
-
-                            <Box textAlign="right" ml={4}>
-                              <Typography
-                                variant="h6"
-                                className={`font-bold ${
-                                  g.netBalance >= 0
-                                    ? "text-green-600"
-                                    : "text-red-600"
-                                }`}
-                              >
-                                ${g.netBalance.toFixed(2)}
-                              </Typography>
-                              <Chip
-                                label={
-                                  g.netBalance >= 0 ? "You're owed" : "You owe"
-                                }
-                                size="small"
-                                color={g.netBalance >= 0 ? "success" : "error"}
-                                variant="outlined"
-                                className="mb-3"
-                              />
-                              <Box className="flex space-x-2">
-                                <Button
-                                  size="small"
-                                  variant="outlined"
-                                  startIcon={<Eye className="w-4 h-4" />}
-                                  onClick={() => openDetailed(g.groupId)}
-                                  sx={{ textTransform: "none" }}
-                                >
-                                  View
-                                </Button>
-                                <Button
-                                  size="small"
-                                  variant="contained"
-                                  startIcon={<Handshake className="w-4 h-4" />}
-                                  onClick={() =>
-                                    navigate(
-                                      `/settlements/create?groupId=${g.groupId}`
-                                    )
-                                  }
-                                  sx={{
-                                    textTransform: "none",
-                                    backgroundColor: "#22c55e",
-                                    "&:hover": { backgroundColor: "#166534" },
-                                  }}
-                                >
-                                  Settle
-                                </Button>
-                              </Box>
-                            </Box>
-                          </Box>
-                        </CardContent>
-                      </Card>
+                          </CardContent>
+                        </Card>
+                      </motion.div>
                     ))}
                   </Box>
                 )}
@@ -433,7 +454,7 @@ export default function DebtSummary() {
                 ) : (
                   <Box display="flex" flexDirection="column" gap={2}>
                     {recentActivity.map((a) => (
-                      <Box key={a.settlementId}>
+                      <motion.div key={a.settlementId} whileHover={{ y: -1 }}>
                         <Box
                           display="flex"
                           justifyContent="space-between"
@@ -458,7 +479,12 @@ export default function DebtSummary() {
                               variant="caption"
                               className="text-gray-500"
                             >
-                              {new Date(a.createdAt).toLocaleString()}
+                              {(() => {
+                                const d = new Date(a.createdAt);
+                                return isValid(d)
+                                  ? format(d, "PPpp")
+                                  : a.createdAt;
+                              })()}
                             </Typography>
                           </Box>
                           <Typography
@@ -474,7 +500,7 @@ export default function DebtSummary() {
                           </Typography>
                         </Box>
                         <Divider />
-                      </Box>
+                      </motion.div>
                     ))}
                   </Box>
                 )}

@@ -19,6 +19,7 @@ import {
 } from "@mui/material";
 import { DollarSign, FileText, CreditCard } from "lucide-react";
 import toast from "react-hot-toast";
+import { motion } from "framer-motion";
 
 const SettleDebt = ({ groupId, toUserId }) => {
   const [amount, setAmount] = useState("");
@@ -73,7 +74,12 @@ const SettleDebt = ({ groupId, toUserId }) => {
   };
 
   return (
-    <div className="max-w-md mx-auto p-4">
+    <motion.div
+      className="max-w-md mx-auto p-4"
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.25 }}
+    >
       <Card className="shadow-lg">
         <CardHeader
           title={
@@ -179,7 +185,7 @@ const SettleDebt = ({ groupId, toUserId }) => {
           )}
         </CardContent>
       </Card>
-    </div>
+    </motion.div>
   );
 };
 

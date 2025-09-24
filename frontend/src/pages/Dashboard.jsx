@@ -6,6 +6,8 @@ import { useAuth } from "../context/AuthContext";
 import { useLocation } from "react-router-dom";
 import { Card, CardContent, Typography, CircularProgress } from "@mui/material";
 import { TrendingUp, TrendingDown, AlertTriangle, Info } from "lucide-react";
+import { motion } from "motion/react";
+import { format } from "date-fns";
 
 const API_BASE_URL = "http://localhost:3005/api";
 
@@ -41,7 +43,9 @@ const Dashboard = () => {
       ] = await Promise.all([
         fetch(
           `${API_BASE_URL}/expense/get-expenses?limit=100&dateFrom=${dateFrom}&dateTo=${dateTo}`,
-          { credentials: "include" }
+          {
+            credentials: "include",
+          }
         ),
         fetch(`${API_BASE_URL}/expense/get-expenses?limit=1000`, {
           credentials: "include",
@@ -203,10 +207,7 @@ const Dashboard = () => {
                 <MetricCard
                   title="This Month"
                   value={`$${dashboardData.monthlyTotal.toFixed(2)}`}
-                  description={new Date().toLocaleString("default", {
-                    month: "long",
-                    year: "numeric",
-                  })}
+                  description={format(new Date(), "MMMM yyyy")}
                   trend="positive"
                 />
                 <MetricCard
@@ -291,12 +292,18 @@ const Dashboard = () => {
 };
 
 const Section = ({ title, children }) => (
-  <section className="space-y-4">
+  <motion.section
+    className="space-y-4"
+    initial={{ opacity: 0, y: 8 }}
+    whileInView={{ opacity: 1, y: 0 }}
+    viewport={{ once: true, amount: 0.2 }}
+    transition={{ duration: 0.25, ease: "easeOut" }}
+  >
     <Typography variant="h6" className="font-semibold text-gray-800">
       {title}
     </Typography>
     {children}
-  </section>
+  </motion.section>
 );
 
 const MetricCard = ({ title, value, description, trend = "neutral" }) => {
@@ -308,22 +315,30 @@ const MetricCard = ({ title, value, description, trend = "neutral" }) => {
   };
 
   return (
-    <Card className="rounded-xl shadow-md hover:shadow-lg transition-shadow duration-300">
-      <CardContent className="p-6 space-y-2">
-        <Typography variant="body2" className="text-gray-500 font-medium">
-          {title}
-        </Typography>
-        <div className="flex items-center space-x-2">
-          <Typography variant="h5" className="font-bold text-gray-900">
-            {value}
+    <motion.div
+      initial={{ opacity: 0, y: 6 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, amount: 0.3 }}
+      transition={{ duration: 0.2, ease: "easeOut" }}
+      whileHover={{ y: -2 }}
+    >
+      <Card className="rounded-xl shadow-md hover:shadow-lg transition-shadow duration-300">
+        <CardContent className="p-6 space-y-2">
+          <Typography variant="body2" className="text-gray-500 font-medium">
+            {title}
           </Typography>
-          {trendConfig[trend].icon}
-        </div>
-        <Typography variant="caption" className="text-gray-400">
-          {description}
-        </Typography>
-      </CardContent>
-    </Card>
+          <div className="flex items-center space-x-2">
+            <Typography variant="h5" className="font-bold text-gray-900">
+              {value}
+            </Typography>
+            {trendConfig[trend].icon}
+          </div>
+          <Typography variant="caption" className="text-gray-400">
+            {description}
+          </Typography>
+        </CardContent>
+      </Card>
+    </motion.div>
   );
 };
 

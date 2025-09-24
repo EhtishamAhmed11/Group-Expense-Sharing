@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import { useState } from "react";
 import {
   Box,
   Grid,
@@ -11,6 +11,7 @@ import {
   Avatar,
 } from "@mui/material";
 import { useAuth } from "../context/AuthContext";
+import { format } from "date-fns";
 
 const ProfileManagement = () => {
   const { user, updateProfile, loading } = useAuth();
@@ -306,18 +307,14 @@ const ProfileManagement = () => {
         <Grid item xs={12} sm={6}>
           <Typography variant="subtitle2">Member Since</Typography>
           <Typography>
-            {user?.createdAt
-              ? new Date(user.createdAt).toLocaleDateString()
-              : "N/A"}
+            {user?.createdAt ? format(new Date(user.createdAt), "PP") : "N/A"}
           </Typography>
         </Grid>
 
         <Grid item xs={12} sm={6}>
           <Typography variant="subtitle2">Last Login</Typography>
           <Typography>
-            {user?.lastLogin
-              ? new Date(user.lastLogin).toLocaleString()
-              : "N/A"}
+            {user?.lastLogin ? format(new Date(user.lastLogin), "PP p") : "N/A"}
           </Typography>
         </Grid>
       </Grid>

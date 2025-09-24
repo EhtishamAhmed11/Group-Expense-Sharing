@@ -1,3 +1,5 @@
+"use client";
+
 // src/pages/ConfirmSettlement.jsx
 import { useState } from "react";
 import {
@@ -15,6 +17,7 @@ import {
   CircularProgress,
 } from "@mui/material";
 import { CheckCircle, XCircle, AlertCircle } from "lucide-react";
+import { motion } from "framer-motion";
 
 export default function ConfirmSettlement({ settlementId }) {
   const [confirm, setConfirm] = useState("true");
@@ -54,7 +57,13 @@ export default function ConfirmSettlement({ settlementId }) {
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
-      <Card className="w-full max-w-xl shadow-lg rounded-2xl">
+      <Card
+        component={motion.div}
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.25, ease: "easeOut" }}
+        className="w-full max-w-xl shadow-lg rounded-2xl"
+      >
         <CardHeader
           title={
             <Typography variant="h5" className="font-bold">

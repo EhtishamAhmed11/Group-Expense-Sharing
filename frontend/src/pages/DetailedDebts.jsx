@@ -4,6 +4,7 @@
 import { useEffect, useState } from "react";
 import DebtChart from "./DebtChart";
 import { useNavigate, useParams } from "react-router-dom";
+import { motion } from "framer-motion";
 import {
   Card,
   CardContent,
@@ -24,7 +25,6 @@ import {
   Grid,
   Container,
   Paper,
-  Accordion,
   AccordionSummary,
   AccordionDetails,
 } from "@mui/material";
@@ -399,9 +399,15 @@ export default function DetailedDebts() {
                   No balances found with current filters.
                 </Typography>
               ) : (
-                <Box className="space-y-3">
+                <motion.div className="space-y-3">
                   {netBalancesArray.map((b, idx) => (
-                    <Card key={idx} variant="outlined" className="rounded-lg">
+                    <motion.div
+                      key={idx}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="rounded-lg"
+                    >
                       <CardContent className="p-4">
                         <Box className="flex items-center justify-between">
                           <Box className="flex-1">
@@ -498,9 +504,9 @@ export default function DetailedDebts() {
                           </Box>
                         </Box>
                       </CardContent>
-                    </Card>
+                    </motion.div>
                   ))}
-                </Box>
+                </motion.div>
               )}
             </CardContent>
           </Card>
@@ -525,10 +531,13 @@ export default function DetailedDebts() {
                   No one owes you money with current filters.
                 </Typography>
               ) : (
-                <Box className="space-y-4">
+                <motion.div className="space-y-4">
                   {peopleOweUser.map((p, idx) => (
-                    <Accordion
+                    <motion.div
                       key={idx}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.2 }}
                       className="rounded-lg border border-green-200"
                     >
                       <AccordionSummary
@@ -614,9 +623,9 @@ export default function DetailedDebts() {
                           ))}
                         </Box>
                       </AccordionDetails>
-                    </Accordion>
+                    </motion.div>
                   ))}
-                </Box>
+                </motion.div>
               )}
             </CardContent>
           </Card>
@@ -641,10 +650,13 @@ export default function DetailedDebts() {
                   You don't owe anyone money with current filters.
                 </Typography>
               ) : (
-                <Box className="space-y-4">
+                <motion.div className="space-y-4">
                   {peopleUserOwes.map((p, idx) => (
-                    <Accordion
+                    <motion.div
                       key={idx}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.2 }}
                       className="rounded-lg border border-red-200"
                     >
                       <AccordionSummary
@@ -731,9 +743,9 @@ export default function DetailedDebts() {
                           ))}
                         </Box>
                       </AccordionDetails>
-                    </Accordion>
+                    </motion.div>
                   ))}
-                </Box>
+                </motion.div>
               )}
             </CardContent>
           </Card>

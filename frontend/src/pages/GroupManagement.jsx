@@ -1,4 +1,6 @@
-import React, { useState, useEffect } from "react";
+"use client";
+
+import { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import { Link } from "react-router-dom";
 import {
@@ -9,9 +11,6 @@ import {
   Typography,
   CircularProgress,
   TextField,
-  Divider,
-  Select,
-  MenuItem,
 } from "@mui/material";
 
 const API_BASE_URL = "http://localhost:3005/api";

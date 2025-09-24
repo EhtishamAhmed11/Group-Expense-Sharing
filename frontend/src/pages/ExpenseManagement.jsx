@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { motion } from "framer-motion";
 import {
   Card,
   CardContent,
@@ -130,7 +131,10 @@ const ExpenseManagement = () => {
     try {
       const response = await fetch(
         `${API_BASE_URL}/expense/delete-expense/${expenseId}`,
-        { method: "DELETE", credentials: "include" }
+        {
+          method: "DELETE",
+          credentials: "include",
+        }
       );
       const data = await response.json();
       if (data.success) {
@@ -361,9 +365,11 @@ const ExpenseManagement = () => {
       ) : (
         <Box className="space-y-4">
           {expenses.map((expense) => (
-            <Card
+            <motion.div
               key={expense.id}
               className="rounded-xl shadow-md hover:shadow-lg transition-all duration-200"
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
             >
               <CardContent className="p-6">
                 <Box className="flex flex-col md:flex-row justify-between gap-4">
@@ -482,7 +488,7 @@ const ExpenseManagement = () => {
                   </Box>
                 </Box>
               </CardContent>
-            </Card>
+            </motion.div>
           ))}
         </Box>
       )}
