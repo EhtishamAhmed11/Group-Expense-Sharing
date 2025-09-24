@@ -1,5 +1,6 @@
 import express from "express";
 import dotenv from "dotenv";
+dotenv.config();
 import { connectDB } from "./connections/db.js";
 import { connectRedis, testRedis } from "./connections/connection.redis.js";
 import authRoutes from "./routes/authentication.routes.js";
@@ -11,7 +12,6 @@ import debtRoutes from "./routes/debt.routes.js";
 import settlementRoutes from "./routes/settlements.routes.js";
 import cookieParser from "cookie-parser";
 import cors from "cors";
-dotenv.config();
 const app = express();
 app.use(express.json());
 app.use(cookieParser());

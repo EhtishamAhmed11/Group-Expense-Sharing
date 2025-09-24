@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import {
   Card,
@@ -27,8 +27,10 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { motion } from "framer-motion";
-
 import toast from "react-hot-toast";
+
+// ✅ Import your CreateExpense Dialog
+import CreateExpense from "./createExpense";
 
 const GroupExpenses = () => {
   const { groupId } = useParams();
@@ -59,6 +61,9 @@ const GroupExpenses = () => {
     totalPages: 1,
     totalExpenses: 0,
   });
+
+  // ✅ Control CreateExpense Dialog
+  const [openExpenseDialog, setOpenExpenseDialog] = useState(false);
 
   const fetchExpenses = async () => {
     try {
@@ -119,7 +124,7 @@ const GroupExpenses = () => {
             variant="h4"
             className="font-bold flex items-center gap-3"
           >
-            <Users className="w-8 h-8 text-blue-600" />
+            <Users className="w-8 h-8 text-black" />
             Group Expenses
           </Typography>
           <Typography variant="body1" className="text-gray-600 mt-1">
@@ -127,11 +132,19 @@ const GroupExpenses = () => {
           </Typography>
         </Box>
         <Button
-          component={Link}
-          to={`/groups/${groupId}/expenses/create`}
-          variant="contained"
+          variant="outlined"
           startIcon={<Plus className="w-4 h-4" />}
-          className="bg-blue-600 hover:bg-blue-700"
+          onClick={() => setOpenExpenseDialog(true)} // ✅ Open dialog
+          sx={{
+            borderColor: "black",
+            color: "black",
+            textTransform: "none",
+            fontWeight: "bold",
+            "&:hover": {
+              bgcolor: "black",
+              color: "white",
+            },
+          }}
         >
           Add New Expense
         </Button>
@@ -224,10 +237,7 @@ const GroupExpenses = () => {
                 <Grid container spacing={4}>
                   <Grid item xs={6} sm={3}>
                     <Box className="text-center">
-                      <Typography
-                        variant="h5"
-                        className="font-bold text-blue-600"
-                      >
+                      <Typography variant="h5" className="font-bold text-black">
                         {summary.totalExpenses}
                       </Typography>
                       <Typography variant="body2" className="text-gray-600">
@@ -237,10 +247,7 @@ const GroupExpenses = () => {
                   </Grid>
                   <Grid item xs={6} sm={3}>
                     <Box className="text-center">
-                      <Typography
-                        variant="h5"
-                        className="font-bold text-green-600"
-                      >
+                      <Typography variant="h5" className="font-bold text-black">
                         ${summary.totalAmount}
                       </Typography>
                       <Typography variant="body2" className="text-gray-600">
@@ -250,10 +257,7 @@ const GroupExpenses = () => {
                   </Grid>
                   <Grid item xs={6} sm={3}>
                     <Box className="text-center">
-                      <Typography
-                        variant="h5"
-                        className="font-bold text-orange-600"
-                      >
+                      <Typography variant="h5" className="font-bold text-black">
                         ${summary.totalUnsettled}
                       </Typography>
                       <Typography variant="body2" className="text-gray-600">
@@ -263,10 +267,7 @@ const GroupExpenses = () => {
                   </Grid>
                   <Grid item xs={6} sm={3}>
                     <Box className="text-center">
-                      <Typography
-                        variant="h5"
-                        className="font-bold text-purple-600"
-                      >
+                      <Typography variant="h5" className="font-bold text-black">
                         ${summary.averageExpense}
                       </Typography>
                       <Typography variant="body2" className="text-gray-600">
@@ -287,17 +288,14 @@ const GroupExpenses = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.2 }}
             >
-              <Card className="mb-4 shadow-sm">
+              <Card className="mb-4 shadow-sm hover:shadow-md transition">
                 <CardHeader
                   title={
                     <Box className="flex items-center justify-between">
                       <Typography variant="h6" className="font-semibold">
                         {exp.description}
                       </Typography>
-                      <Typography
-                        variant="h6"
-                        className="font-bold text-green-600"
-                      >
+                      <Typography variant="h6" className="font-bold text-black">
                         ${exp.amount}
                       </Typography>
                     </Box>
@@ -314,18 +312,31 @@ const GroupExpenses = () => {
                         icon={<User className="w-4 h-4" />}
                         label={`Paid by: ${exp.payer_first_name} ${exp.payer_last_name}`}
                         size="small"
-                        color={exp.paid_by === user.id ? "success" : "default"}
+                        sx={{
+                          borderColor: "black",
+                          color: "black",
+                          "& .MuiChip-icon": { color: "black" },
+                        }}
                       />
                       <Chip
                         icon={<Calendar className="w-4 h-4" />}
                         label={format(new Date(exp.expense_date), "PP")}
                         size="small"
+                        sx={{
+                          borderColor: "black",
+                          color: "black",
+                          "& .MuiChip-icon": { color: "black" },
+                        }}
                       />
                       <Chip
                         icon={<DollarSign className="w-4 h-4" />}
                         label={exp.is_settled ? "Settled" : "Pending"}
                         size="small"
-                        color={exp.is_settled ? "success" : "warning"}
+                        sx={{
+                          bgcolor: exp.is_settled ? "black" : "white",
+                          color: exp.is_settled ? "white" : "black",
+                          border: "1px solid black",
+                        }}
                       />
                       {exp.split_type && (
                         <Chip
@@ -360,12 +371,30 @@ const GroupExpenses = () => {
                 count={pagination.totalPages}
                 page={pagination.currentPage}
                 onChange={handlePageChange}
-                color="primary"
+                sx={{
+                  "& .MuiPaginationItem-root": {
+                    color: "black",
+                    border: "1px solid black",
+                  },
+                  "& .Mui-selected": {
+                    bgcolor: "black !important",
+                    color: "white !important",
+                  },
+                }}
               />
             </Box>
           )}
         </>
       )}
+
+      {/* ✅ CreateExpense Dialog */}
+      <CreateExpense
+        open={openExpenseDialog}
+        onClose={() => {
+          setOpenExpenseDialog(false);
+          fetchExpenses(); // refresh list after adding
+        }}
+      />
     </div>
   );
 };

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import { Link } from "react-router-dom";
+import { motion } from "framer-motion";
 import {
   Box,
   Button,
@@ -14,6 +15,13 @@ import {
 } from "@mui/material";
 
 const API_BASE_URL = "http://localhost:3005/api";
+
+const blackButtonStyle = {
+  textTransform: "none",
+  backgroundColor: "#000",
+  color: "#fff",
+  "&:hover": { backgroundColor: "#222" },
+};
 
 const GroupManagement = () => {
   const { user } = useAuth();
@@ -45,25 +53,33 @@ const GroupManagement = () => {
   useEffect(() => {
     if (user) fetchUserGroups();
   }, [user]);
+
   const handleViewGroup = (group) => {
     setSelectedGroup(group);
     setCurrentView("details");
   };
+
   const clearMessages = () => {
     setError("");
     setSuccess("");
   };
 
+  /** ---------------------- NAVIGATION ---------------------- */
   const renderNavigation = () => (
     <Box display="flex" gap={2} mb={3}>
       {["list", "create", "join"].map((view) => (
         <Button
           key={view}
           variant={currentView === view ? "contained" : "outlined"}
-          color={currentView === view ? "primary" : "inherit"}
           onClick={() => {
             setCurrentView(view);
             clearMessages();
+          }}
+          sx={{
+            ...blackButtonStyle,
+            borderColor: "#000",
+            backgroundColor: currentView === view ? "#000" : "transparent",
+            color: currentView === view ? "#fff" : "#000",
           }}
         >
           {view === "list"
@@ -76,6 +92,7 @@ const GroupManagement = () => {
     </Box>
   );
 
+  /** ---------------------- ALERTS ---------------------- */
   const renderMessages = () => (
     <>
       {error && (
@@ -84,7 +101,7 @@ const GroupManagement = () => {
           color="#721c24"
           p={2}
           mb={2}
-          borderRadius={1}
+          borderRadius={2}
           display="flex"
           justifyContent="space-between"
           alignItems="center"
@@ -101,7 +118,7 @@ const GroupManagement = () => {
           color="#155724"
           p={2}
           mb={2}
-          borderRadius={1}
+          borderRadius={2}
           display="flex"
           justifyContent="space-between"
           alignItems="center"
@@ -115,20 +132,23 @@ const GroupManagement = () => {
     </>
   );
 
+  /** ---------------------- GROUP LIST ---------------------- */
   const renderGroupsList = () => (
     <Box>
       <Box
         display="flex"
         justifyContent="space-between"
         alignItems="center"
-        mb={2}
+        mb={3}
       >
-        <Typography variant="h5">My Groups</Typography>
+        <Typography variant="h5" fontWeight={700}>
+          My Groups
+        </Typography>
         <Button
           variant="contained"
-          color="success"
           onClick={fetchUserGroups}
           disabled={loading}
+          sx={blackButtonStyle}
         >
           {loading ? <CircularProgress size={18} color="inherit" /> : "Refresh"}
         </Button>
@@ -137,109 +157,134 @@ const GroupManagement = () => {
       {loading ? (
         <Typography>Loading groups...</Typography>
       ) : groups.length === 0 ? (
-        <Box textAlign="center" p={5}>
-          <Typography>You’re not a member of any groups yet.</Typography>
-          <Typography>
+        <Card
+          sx={{
+            p: 5,
+            borderRadius: 3,
+            boxShadow: 2,
+            textAlign: "center",
+            backgroundColor: "#fafafa",
+          }}
+        >
+          <Typography variant="h6" mb={1}>
+            You’re not a member of any groups yet.
+          </Typography>
+          <Typography color="text.secondary">
             Create a new group or join one to get started!
           </Typography>
-        </Box>
+        </Card>
       ) : (
         <Box display="flex" flexDirection="column" gap={2}>
           {groups.map((group) => (
-            <Card
+            <motion.div
               key={group.id}
-              variant="outlined"
-              sx={{ borderRadius: 2, boxShadow: 1 }}
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3 }}
+              whileHover={{ scale: 1.01 }}
             >
-              <CardContent>
-                <Box
-                  display="flex"
-                  justifyContent="space-between"
-                  alignItems="flex-start"
-                >
-                  <Box flex={1}>
-                    <Box display="flex" alignItems="center" mb={1}>
-                      <Typography variant="h6" mr={1}>
-                        {group.name}
-                      </Typography>
-                      <Box
-                        component="span"
-                        sx={{
-                          bgcolor:
-                            group.userRole === "admin"
-                              ? "error.main"
-                              : "success.main",
-                          color: "white",
-                          px: 1,
-                          py: "2px",
-                          borderRadius: 1,
-                          fontSize: 12,
-                        }}
-                      >
-                        {group.userRole}
-                      </Box>
-                      {group.stats.hasActivity && (
+              <Card
+                variant="outlined"
+                sx={{
+                  borderRadius: 3,
+                  boxShadow: 2,
+                  p: 2,
+                }}
+              >
+                <CardContent>
+                  <Box
+                    display="flex"
+                    justifyContent="space-between"
+                    alignItems="flex-start"
+                  >
+                    <Box flex={1}>
+                      <Box display="flex" alignItems="center" mb={1}>
+                        <Typography variant="h6" mr={1} fontWeight={600}>
+                          {group.name}
+                        </Typography>
                         <Box
                           component="span"
                           sx={{
-                            bgcolor: "primary.main",
+                            bgcolor:
+                              group.userRole === "admin"
+                                ? "error.main"
+                                : "success.main",
                             color: "white",
                             px: 1,
                             py: "2px",
                             borderRadius: 1,
                             fontSize: 12,
-                            ml: 1,
                           }}
                         >
-                          Active
+                          {group.userRole}
                         </Box>
+                        {group.stats.hasActivity && (
+                          <Box
+                            component="span"
+                            sx={{
+                              bgcolor: "primary.main",
+                              color: "white",
+                              px: 1,
+                              py: "2px",
+                              borderRadius: 1,
+                              fontSize: 12,
+                              ml: 1,
+                            }}
+                          >
+                            Active
+                          </Box>
+                        )}
+                      </Box>
+
+                      {group.description && (
+                        <Typography color="text.secondary">
+                          {group.description}
+                        </Typography>
                       )}
+
+                      <Typography variant="body2" color="text.secondary" mt={1}>
+                        Members: {group.memberCount} • Total Expenses:{" "}
+                        {group.stats.totalExpenses} • Amount: $
+                        {group.stats.totalAmount.toFixed(2)}
+                      </Typography>
+
+                      {group.userBalance !== 0 && (
+                        <Typography
+                          mt={0.5}
+                          fontWeight="bold"
+                          color={
+                            group.userBalance > 0
+                              ? "success.main"
+                              : "error.main"
+                          }
+                        >
+                          {group.userBalance > 0
+                            ? `You are owed $${group.userBalance.toFixed(2)}`
+                            : `You owe $${Math.abs(group.userBalance).toFixed(
+                                2
+                              )}`}
+                        </Typography>
+                      )}
+
+                      <Typography variant="caption" color="text.secondary">
+                        Joined: {new Date(group.joinedAt).toLocaleDateString()}
+                      </Typography>
                     </Box>
 
-                    {group.description && (
-                      <Typography color="text.secondary">
-                        {group.description}
-                      </Typography>
-                    )}
-
-                    <Typography variant="body2" color="text.secondary" mt={1}>
-                      Members: {group.memberCount} • Total Expenses:{" "}
-                      {group.stats.totalExpenses} • Amount: $
-                      {group.stats.totalAmount.toFixed(2)}
-                    </Typography>
-                    {group.userBalance !== 0 && (
-                      <Typography
-                        mt={0.5}
-                        fontWeight="bold"
-                        color={
-                          group.userBalance > 0 ? "success.main" : "error.main"
-                        }
+                    <Box display="flex" flexDirection="column" gap={1}>
+                      <Link
+                        to={`/groups/${group.id}/expenses`}
+                        style={{ textDecoration: "none" }}
                       >
-                        {group.userBalance > 0
-                          ? `You are owed $${group.userBalance.toFixed(2)}`
-                          : `You owe $${Math.abs(group.userBalance).toFixed(
-                              2
-                            )}`}
-                      </Typography>
-                    )}
-                    <Typography variant="caption" color="text.secondary">
-                      Joined: {new Date(group.joinedAt).toLocaleDateString()}
-                    </Typography>
+                        <Button variant="contained" sx={blackButtonStyle}>
+                          View Expenses
+                        </Button>
+                      </Link>
+                    </Box>
                   </Box>
-
-                  <Box display="flex" flexDirection="column" gap={1}>
-                    <Link
-                      to={`/groups/${group.id}/expenses`}
-                      style={{ textDecoration: "none" }}
-                    >
-                      <Button variant="contained" color="primary">
-                        View Expenses
-                      </Button>
-                    </Link>
-                  </Box>
-                </Box>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </motion.div>
           ))}
         </Box>
       )}
@@ -250,7 +295,7 @@ const GroupManagement = () => {
 
   return (
     <Box maxWidth="1200px" mx="auto" p={3}>
-      <Typography variant="h4" mb={3}>
+      <Typography variant="h4" mb={3} fontWeight={700}>
         Group Management
       </Typography>
       {renderNavigation()}
@@ -280,21 +325,7 @@ const GroupManagement = () => {
         />
       )}
       {currentView === "details" && selectedGroup && (
-        <GroupDetails
-          group={selectedGroup}
-          onBack={() => setCurrentView("list")}
-          onGroupUpdate={() => {
-            setSuccess("Group updated successfully!");
-            fetchUserGroups();
-          }}
-          onLeaveGroup={() => {
-            setSuccess("Left group successfully");
-            setCurrentView("list");
-            fetchUserGroups();
-          }}
-          setError={setError}
-          setSuccess={setSuccess}
-        />
+        <Typography>Group Details Placeholder</Typography>
       )}
     </Box>
   );
@@ -334,8 +365,8 @@ const GroupForm = ({ onCancel, onSuccess, setError }) => {
   };
 
   return (
-    <Card sx={{ p: 3, borderRadius: 2, boxShadow: 2, maxWidth: 500 }}>
-      <Typography variant="h5" mb={2}>
+    <Card sx={{ p: 3, borderRadius: 3, boxShadow: 3, maxWidth: 500 }}>
+      <Typography variant="h5" mb={2} fontWeight={600}>
         Create New Group
       </Typography>
       <form onSubmit={handleSubmit}>
@@ -364,17 +395,17 @@ const GroupForm = ({ onCancel, onSuccess, setError }) => {
           <Button
             type="submit"
             variant="contained"
-            color="primary"
             disabled={loading}
+            sx={blackButtonStyle}
           >
             {loading ? <CircularProgress size={18} /> : "Create Group"}
           </Button>
           <Button
             type="button"
             variant="outlined"
-            color="secondary"
             onClick={onCancel}
             disabled={loading}
+            sx={{ borderColor: "#000", color: "#000", textTransform: "none" }}
           >
             Cancel
           </Button>
@@ -415,8 +446,8 @@ const JoinGroup = ({ onCancel, onSuccess, setError }) => {
   };
 
   return (
-    <Card sx={{ p: 3, borderRadius: 2, boxShadow: 2, maxWidth: 400 }}>
-      <Typography variant="h5" mb={2}>
+    <Card sx={{ p: 3, borderRadius: 3, boxShadow: 3, maxWidth: 400 }}>
+      <Typography variant="h5" mb={2} fontWeight={600}>
         Join Group
       </Typography>
       <form onSubmit={handleSubmit}>
@@ -434,17 +465,17 @@ const JoinGroup = ({ onCancel, onSuccess, setError }) => {
           <Button
             type="submit"
             variant="contained"
-            color="success"
             disabled={loading || !inviteCode.trim()}
+            sx={blackButtonStyle}
           >
             {loading ? <CircularProgress size={18} /> : "Join Group"}
           </Button>
           <Button
             type="button"
             variant="outlined"
-            color="secondary"
             onClick={onCancel}
             disabled={loading}
+            sx={{ borderColor: "#000", color: "#000", textTransform: "none" }}
           >
             Cancel
           </Button>

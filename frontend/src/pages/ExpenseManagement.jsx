@@ -1,5 +1,3 @@
-"use client";
-
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
@@ -156,146 +154,162 @@ const ExpenseManagement = () => {
     setCurrentView("edit");
   };
 
+  /** ---------------------- FILTERS UI ---------------------- */
   const renderFilters = () => (
-    <Card className="rounded-xl shadow-md mb-6">
-      <CardHeader
-        className="pb-3"
-        title={
-          <Box className="flex items-center gap-2">
-            <Filter className="text-gray-600 w-5 h-5" />
-            <Typography
-              variant="h6"
-              fontFamily="Inter, sans-serif"
-              fontWeight={600}
-            >
-              Filters & Search
-            </Typography>
-          </Box>
-        }
-      />
-      <CardContent>
-        <Grid container spacing={3}>
-          <Grid item xs={12} md={4}>
-            <TextField
-              fullWidth
-              label="Search"
-              value={filters.search}
-              onChange={(e) => handleFilterChange("search", e.target.value)}
-              placeholder="Search description or location"
-              size="small"
-              InputProps={{
-                startAdornment: (
-                  <Search className="w-4 h-4 mr-2 text-gray-400" />
-                ),
-              }}
-            />
-          </Grid>
-          <Grid item xs={12} md={2}>
-            <FormControl fullWidth size="small">
-              <InputLabel>Category</InputLabel>
-              <Select
-                value={filters.category}
-                onChange={(e) => handleFilterChange("category", e.target.value)}
-                label="Category"
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4 }}
+    >
+      <Card className="rounded-xl shadow-md mb-6">
+        <CardHeader
+          className="pb-3"
+          title={
+            <Box className="flex items-center gap-2">
+              <Filter className="text-gray-600 w-5 h-5" />
+              <Typography
+                variant="h6"
+                fontFamily="Inter, sans-serif"
+                fontWeight={600}
               >
-                <MenuItem value="">All Categories</MenuItem>
-                {categories.map((c) => (
-                  <MenuItem key={c.id} value={c.name}>
-                    {c.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+                Filters & Search
+              </Typography>
+            </Box>
+          }
+        />
+        <CardContent>
+          <Grid container spacing={3}>
+            <Grid item xs={12} md={4}>
+              <TextField
+                fullWidth
+                label="Search"
+                value={filters.search}
+                onChange={(e) => handleFilterChange("search", e.target.value)}
+                placeholder="Search description or location"
+                size="small"
+                InputProps={{
+                  startAdornment: (
+                    <Search className="w-4 h-4 mr-2 text-gray-400" />
+                  ),
+                }}
+              />
+            </Grid>
+            <Grid item xs={12} md={2}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Category</InputLabel>
+                <Select
+                  value={filters.category}
+                  onChange={(e) =>
+                    handleFilterChange("category", e.target.value)
+                  }
+                  label="Category"
+                >
+                  <MenuItem value="">All Categories</MenuItem>
+                  {categories.map((c) => (
+                    <MenuItem key={c.id} value={c.name}>
+                      {c.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} md={2}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Payment Method</InputLabel>
+                <Select
+                  value={filters.paymentMethod}
+                  onChange={(e) =>
+                    handleFilterChange("paymentMethod", e.target.value)
+                  }
+                  label="Payment Method"
+                >
+                  <MenuItem value="">All Methods</MenuItem>
+                  <MenuItem value="cash">Cash</MenuItem>
+                  <MenuItem value="credit_card">Credit Card</MenuItem>
+                  <MenuItem value="debit_card">Debit Card</MenuItem>
+                  <MenuItem value="digital_wallet">Digital Wallet</MenuItem>
+                  <MenuItem value="bank_transfer">Bank Transfer</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} md={2}>
+              <TextField
+                fullWidth
+                label="Date From"
+                type="date"
+                value={filters.dateFrom}
+                onChange={(e) => handleFilterChange("dateFrom", e.target.value)}
+                InputLabelProps={{ shrink: true }}
+                size="small"
+              />
+            </Grid>
+            <Grid item xs={12} md={2}>
+              <TextField
+                fullWidth
+                label="Date To"
+                type="date"
+                value={filters.dateTo}
+                onChange={(e) => handleFilterChange("dateTo", e.target.value)}
+                InputLabelProps={{ shrink: true }}
+                size="small"
+              />
+            </Grid>
+            <Grid item xs={12} md={2}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Recurring</InputLabel>
+                <Select
+                  value={filters.recurring}
+                  onChange={(e) =>
+                    handleFilterChange("recurring", e.target.value)
+                  }
+                  label="Recurring"
+                >
+                  <MenuItem value="">All</MenuItem>
+                  <MenuItem value="true">Recurring Only</MenuItem>
+                  <MenuItem value="false">Non-recurring Only</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
           </Grid>
-          <Grid item xs={12} md={2}>
-            <FormControl fullWidth size="small">
-              <InputLabel>Payment Method</InputLabel>
-              <Select
-                value={filters.paymentMethod}
-                onChange={(e) =>
-                  handleFilterChange("paymentMethod", e.target.value)
-                }
-                label="Payment Method"
-              >
-                <MenuItem value="">All Methods</MenuItem>
-                <MenuItem value="cash">Cash</MenuItem>
-                <MenuItem value="credit_card">Credit Card</MenuItem>
-                <MenuItem value="debit_card">Debit Card</MenuItem>
-                <MenuItem value="digital_wallet">Digital Wallet</MenuItem>
-                <MenuItem value="bank_transfer">Bank Transfer</MenuItem>
-              </Select>
-            </FormControl>
-          </Grid>
-          <Grid item xs={12} md={2}>
-            <TextField
-              fullWidth
-              label="Date From"
-              type="date"
-              value={filters.dateFrom}
-              onChange={(e) => handleFilterChange("dateFrom", e.target.value)}
-              InputLabelProps={{ shrink: true }}
-              size="small"
-            />
-          </Grid>
-          <Grid item xs={12} md={2}>
-            <TextField
-              fullWidth
-              label="Date To"
-              type="date"
-              value={filters.dateTo}
-              onChange={(e) => handleFilterChange("dateTo", e.target.value)}
-              InputLabelProps={{ shrink: true }}
-              size="small"
-            />
-          </Grid>
-          <Grid item xs={12} md={2}>
-            <FormControl fullWidth size="small">
-              <InputLabel>Recurring</InputLabel>
-              <Select
-                value={filters.recurring}
-                onChange={(e) =>
-                  handleFilterChange("recurring", e.target.value)
-                }
-                label="Recurring"
-              >
-                <MenuItem value="">All</MenuItem>
-                <MenuItem value="true">Recurring Only</MenuItem>
-                <MenuItem value="false">Non-recurring Only</MenuItem>
-              </Select>
-            </FormControl>
-          </Grid>
-        </Grid>
 
-        <Box className="flex justify-end mt-4">
-          <Button
-            variant="outlined"
-            startIcon={<RefreshCw className="w-4 h-4" />}
-            onClick={() =>
-              setFilters({
-                page: 1,
-                limit: 20,
-                category: "",
-                dateFrom: "",
-                dateTo: "",
-                paymentMethod: "",
-                recurring: "",
-                minAmount: "",
-                maxAmount: "",
-                search: "",
-              })
-            }
-            sx={{ textTransform: "none" }}
-          >
-            Clear Filters
-          </Button>
-        </Box>
-      </CardContent>
-    </Card>
+          <Box className="flex justify-end mt-4">
+            <Button
+              variant="outlined"
+              startIcon={<RefreshCw className="w-4 h-4" />}
+              onClick={() =>
+                setFilters({
+                  page: 1,
+                  limit: 20,
+                  category: "",
+                  dateFrom: "",
+                  dateTo: "",
+                  paymentMethod: "",
+                  recurring: "",
+                  minAmount: "",
+                  maxAmount: "",
+                  search: "",
+                })
+              }
+              sx={{ textTransform: "none" }}
+            >
+              Clear Filters
+            </Button>
+          </Box>
+        </CardContent>
+      </Card>
+    </motion.div>
   );
 
+  /** ---------------------- EXPENSE LIST UI ---------------------- */
   const renderExpenseList = () => (
     <Container maxWidth="xl" className="py-8">
-      <Box className="mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      {/* Header */}
+      <motion.div
+        initial={{ opacity: 0, y: -15 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+        className="mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4"
+      >
         <Box>
           <Typography
             variant="h4"
@@ -309,28 +323,36 @@ const ExpenseManagement = () => {
             Track and manage all your personal expenses
           </Typography>
         </Box>
+        {/* Add New Expense Button */}
         <Button
           variant="contained"
           startIcon={<Plus className="w-4 h-4" />}
           onClick={() => setCurrentView("create")}
           sx={{
             textTransform: "none",
-            backgroundColor: "rgb(37, 99, 235)",
-            "&:hover": { backgroundColor: "rgb(29, 78, 216)" },
+            backgroundColor: "black",
+            color: "white",
+            "&:hover": { backgroundColor: "#333" },
+            borderRadius: "8px",
+            paddingX: 2.5,
+            paddingY: 1,
           }}
         >
           Add New Expense
         </Button>
-      </Box>
+      </motion.div>
 
+      {/* Filters */}
       {renderFilters()}
 
+      {/* Error */}
       {error && (
         <Alert severity="error" className="rounded-lg mb-4">
           {error}
         </Alert>
       )}
 
+      {/* Loader */}
       {loading ? (
         <Box className="flex items-center justify-center h-64 space-x-3">
           <CircularProgress size={28} />
@@ -339,41 +361,60 @@ const ExpenseManagement = () => {
           </Typography>
         </Box>
       ) : expenses.length === 0 ? (
-        <Card className="rounded-xl shadow-md">
-          <CardContent className="text-center py-12">
-            <Receipt className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <Typography variant="h6" color="text.secondary" className="mb-2">
-              No expenses found
-            </Typography>
-            <Typography variant="body2" color="text.secondary" className="mb-4">
-              Start by adding your first expense
-            </Typography>
-            <Button
-              variant="contained"
-              startIcon={<Plus className="w-4 h-4" />}
-              onClick={() => setCurrentView("create")}
-              sx={{
-                textTransform: "none",
-                backgroundColor: "rgb(37, 99, 235)",
-                "&:hover": { backgroundColor: "rgb(29, 78, 216)" },
-              }}
-            >
-              Add Expense
-            </Button>
-          </CardContent>
-        </Card>
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.3 }}
+        >
+          <Card className="rounded-xl shadow-md">
+            <CardContent className="text-center py-12">
+              <Receipt className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+              <Typography variant="h6" color="text.secondary" className="mb-2">
+                No expenses found
+              </Typography>
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                className="mb-4"
+              >
+                Start by adding your first expense
+              </Typography>
+              {/* Add New Expense Button */}
+              <Button
+                variant="contained"
+                startIcon={<Plus className="w-4 h-4" />}
+                onClick={() => setCurrentView("create")}
+                sx={{
+                  textTransform: "none",
+                  backgroundColor: "black",
+                  color: "white",
+                  "&:hover": { backgroundColor: "#333" },
+                  borderRadius: "8px",
+                  paddingX: 2.5,
+                  paddingY: 1,
+                }}
+              >
+                Add New Expense
+              </Button>
+            </CardContent>
+          </Card>
+        </motion.div>
       ) : (
         <Box className="space-y-4">
           {expenses.map((expense) => (
             <motion.div
               key={expense.id}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3 }}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.97 }}
               className="rounded-xl shadow-md hover:shadow-lg transition-all duration-200"
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
             >
               <CardContent className="p-6">
                 <Box className="flex flex-col md:flex-row justify-between gap-4">
                   <Box className="flex-1">
+                    {/* Amount + Chips */}
                     <Box className="flex items-center flex-wrap gap-2 mb-2">
                       <Typography
                         variant="h5"
@@ -403,9 +444,13 @@ const ExpenseManagement = () => {
                         />
                       )}
                     </Box>
+
+                    {/* Description */}
                     <Typography variant="h6" fontWeight={600} className="mb-2">
                       {expense.description}
                     </Typography>
+
+                    {/* Meta */}
                     <Grid
                       container
                       spacing={2}
@@ -452,6 +497,8 @@ const ExpenseManagement = () => {
                         </Grid>
                       )}
                     </Grid>
+
+                    {/* Notes */}
                     {expense.notes && (
                       <Box className="mt-3">
                         <Typography variant="body2" color="text.secondary">
@@ -462,26 +509,38 @@ const ExpenseManagement = () => {
                     )}
                   </Box>
 
+                  {/* Actions */}
                   <Box className="flex gap-2">
                     <Button
                       size="small"
                       variant="outlined"
                       startIcon={<Edit className="w-4 h-4" />}
                       onClick={() => handleEditExpense(expense)}
-                      sx={{ textTransform: "none" }}
+                      sx={{
+                        textTransform: "none",
+                        borderColor: "black",
+                        color: "black",
+                        fontSize: "0.8rem",
+                        "&:hover": { backgroundColor: "black", color: "white" },
+                      }}
                     >
                       Edit
                     </Button>
                     <Button
                       size="small"
                       variant="outlined"
-                      color="error"
                       startIcon={<Trash2 className="w-4 h-4" />}
                       onClick={() => {
                         setExpenseToDelete(expense);
                         setDeleteDialogOpen(true);
                       }}
-                      sx={{ textTransform: "none" }}
+                      sx={{
+                        textTransform: "none",
+                        borderColor: "black",
+                        color: "black",
+                        fontSize: "0.8rem",
+                        "&:hover": { backgroundColor: "black", color: "white" },
+                      }}
                     >
                       Delete
                     </Button>
@@ -493,6 +552,7 @@ const ExpenseManagement = () => {
         </Box>
       )}
 
+      {/* Delete Confirm Dialog */}
       <Dialog
         open={deleteDialogOpen}
         onClose={() => setDeleteDialogOpen(false)}
@@ -668,8 +728,18 @@ const ExpenseForm = ({ expense = null, onCancel, onSuccess }) => {
         </Typography>
       </Box>
 
-      <Card className="rounded-xl shadow-md">
+      <Card className="shadow-sm">
+        <CardHeader
+          title={expense ? "Edit Expense" : "Create Expense"}
+          subheader="Fill in the details below"
+          sx={{ pb: 0 }}
+        />
         <CardContent className="p-6">
+          <Box
+            component="form"
+            onSubmit={handleSubmit}
+            className="space-y-6"
+          ></Box>
           {error && (
             <Alert severity="error" className="rounded-lg mb-4">
               {error}
@@ -680,19 +750,23 @@ const ExpenseForm = ({ expense = null, onCancel, onSuccess }) => {
             <Grid container spacing={3}>
               <Grid item xs={12} md={6}>
                 <TextField
-                  fullWidth
                   label="Amount"
                   name="amount"
                   type="number"
                   value={formData.amount}
                   onChange={handleInputChange}
                   required
-                  InputProps={{
-                    startAdornment: (
-                      <DollarSign className="w-4 h-4 mr-2 text-gray-400" />
-                    ),
-                  }}
+                  fullWidth
                   variant="outlined"
+                  size="small"
+                  sx={{
+                    "& .MuiOutlinedInput-root": {
+                      borderRadius: "8px",
+                    },
+                    "& label": { color: "gray" },
+                    "&:hover fieldset": { borderColor: "black" },
+                    "&.Mui-focused fieldset": { borderColor: "black" },
+                  }}
                 />
               </Grid>
               <Grid item xs={12} md={6}>
@@ -713,35 +787,43 @@ const ExpenseForm = ({ expense = null, onCancel, onSuccess }) => {
                   variant="outlined"
                 />
               </Grid>
-              <Grid item xs={12}>
+              <Grid item xs={12} md={6}>
                 <TextField
-                  fullWidth
                   label="Description"
                   name="description"
                   value={formData.description}
                   onChange={handleInputChange}
                   required
-                  InputProps={{
-                    startAdornment: (
-                      <FileText className="w-4 h-4 mr-2 text-gray-400" />
-                    ),
-                  }}
+                  fullWidth
                   variant="outlined"
+                  size="small"
+                  sx={{
+                    "& .MuiOutlinedInput-root": {
+                      borderRadius: "8px",
+                    },
+                    "& label": { color: "gray" },
+                    "&:hover fieldset": { borderColor: "black" },
+                    "&.Mui-focused fieldset": { borderColor: "black" },
+                  }}
                 />
               </Grid>
               <Grid item xs={12} md={6}>
                 <TextField
-                  fullWidth
                   label="Category"
                   name="category"
                   value={formData.category}
                   onChange={handleInputChange}
-                  InputProps={{
-                    startAdornment: (
-                      <Tag className="w-4 h-4 mr-2 text-gray-400" />
-                    ),
-                  }}
+                  fullWidth
                   variant="outlined"
+                  size="small"
+                  sx={{
+                    "& .MuiOutlinedInput-root": {
+                      borderRadius: "8px",
+                    },
+                    "& label": { color: "gray" },
+                    "&:hover fieldset": { borderColor: "black" },
+                    "&.Mui-focused fieldset": { borderColor: "black" },
+                  }}
                 />
               </Grid>
               <Grid item xs={12} md={6}>
@@ -892,10 +974,16 @@ const ExpenseForm = ({ expense = null, onCancel, onSuccess }) => {
                 variant="outlined"
                 onClick={onCancel}
                 className="flex-1"
-                sx={{ textTransform: "none" }}
+                sx={{
+                  textTransform: "none",
+                  borderColor: "black",
+                  color: "black",
+                  "&:hover": { backgroundColor: "black", color: "white" },
+                }}
               >
                 Cancel
               </Button>
+
               <Button
                 type="submit"
                 variant="contained"
@@ -903,8 +991,9 @@ const ExpenseForm = ({ expense = null, onCancel, onSuccess }) => {
                 className="flex-1"
                 sx={{
                   textTransform: "none",
-                  backgroundColor: "rgb(37, 99, 235)",
-                  "&:hover": { backgroundColor: "rgb(29, 78, 216)" },
+                  backgroundColor: "black",
+                  color: "white",
+                  "&:hover": { backgroundColor: "#333" },
                 }}
                 startIcon={
                   loading ? (

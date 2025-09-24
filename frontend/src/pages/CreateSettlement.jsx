@@ -1,30 +1,28 @@
 "use client";
 
-// src/pages/CreateSettlement.jsx
 import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
+  Container,
   Card,
   CardContent,
-  CardHeader,
   Typography,
   TextField,
   Button,
   Box,
   Alert,
   CircularProgress,
-  Container,
+  InputAdornment,
   Divider,
 } from "@mui/material";
-import { InputAdornment } from "@mui/material";
 import { motion } from "framer-motion";
 import {
-  ArrowLeft,
   DollarSign,
   FileText,
   Users,
   User,
   CheckCircle,
+  ArrowLeft,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
 
@@ -59,7 +57,6 @@ export default function CreateSettlement() {
     setError(null);
 
     try {
-      // match backend: POST /api/debts/settle/:groupId/:toUserId
       const res = await fetch(
         `${API_BASE_URL}/settlements/settle/${form.groupId}/${form.otherUserId}`,
         {
@@ -89,50 +86,43 @@ export default function CreateSettlement() {
   };
 
   return (
-    <Container maxWidth="md" className="py-8">
+    <Container maxWidth="md" sx={{ py: 6 }}>
+      {/* Page Header */}
       <Box className="mb-6">
         <Button
           startIcon={<ArrowLeft className="w-4 h-4" />}
           onClick={() => navigate(-1)}
-          className="mb-4 text-gray-600"
-          sx={{ textTransform: "none" }}
+          sx={{ textTransform: "none", mb: 2 }}
         >
           Back
         </Button>
 
-        <Typography variant="h4" className="font-bold text-gray-900 mb-2">
+        <Typography variant="h4" fontWeight="bold" gutterBottom>
           Create Settlement
         </Typography>
-        <Typography variant="body2" className="text-gray-600">
+        <Typography variant="body2" color="text.secondary">
           Settle debts between group members
         </Typography>
       </Box>
 
+      {/* Main Card */}
       <Card
         component={motion.div}
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.25, ease: "easeOut" }}
-        className="shadow-lg rounded-2xl border-0"
+        sx={{ borderRadius: 3, boxShadow: 4 }}
       >
-        <CardHeader className="pb-4">
-          <Box className="flex items-center space-x-2">
-            <CheckCircle className="w-5 h-5 text-green-600" />
-            <Typography variant="h6" className="font-semibold">
-              Settlement Details
-            </Typography>
-          </Box>
-        </CardHeader>
-
-        <CardContent className="space-y-6">
+        <CardContent sx={{ p: 4 }}>
           {error && (
-            <Alert severity="error" className="rounded-lg">
+            <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>
               {error}
             </Alert>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-6">
-            <Box className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Group + Other User */}
+            <Box className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               <TextField
                 name="groupId"
                 label="Group ID"
@@ -147,8 +137,6 @@ export default function CreateSettlement() {
                     </InputAdornment>
                   ),
                 }}
-                className="bg-gray-50"
-                variant="outlined"
                 placeholder="Enter group ID"
               />
 
@@ -166,12 +154,11 @@ export default function CreateSettlement() {
                     </InputAdornment>
                   ),
                 }}
-                className="bg-gray-50"
-                variant="outlined"
                 placeholder="Enter user ID"
               />
             </Box>
 
+            {/* Amount */}
             <TextField
               name="amount"
               label="Settlement Amount"
@@ -187,12 +174,12 @@ export default function CreateSettlement() {
                   </InputAdornment>
                 ),
               }}
-              className="bg-gray-50"
-              variant="outlined"
               placeholder="0.00"
               helperText="Enter the amount to settle"
+              sx={{ mb: 4 }}
             />
 
+            {/* Notes */}
             <TextField
               name="notes"
               label="Notes (Optional)"
@@ -208,20 +195,31 @@ export default function CreateSettlement() {
                   </InputAdornment>
                 ),
               }}
-              className="bg-gray-50"
-              variant="outlined"
               placeholder="Add any additional notes about this settlement..."
+              sx={{ mb: 4 }}
             />
 
-            <Divider className="my-6" />
+            <Divider sx={{ my: 4 }} />
 
+            {/* Actions */}
             <Box className="flex gap-3">
               <Button
                 type="button"
                 variant="outlined"
                 onClick={() => navigate(-1)}
                 className="flex-1"
-                sx={{ textTransform: "none" }}
+                sx={{
+                  textTransform: "none",
+                  borderRadius: "0.75rem",
+                  fontWeight: 500,
+                  height: "44px",
+                  borderColor: "black",
+                  color: "black",
+                  "&:hover": {
+                    borderColor: "black",
+                    backgroundColor: "rgba(0,0,0,0.04)",
+                  },
+                }}
               >
                 Cancel
               </Button>
@@ -230,12 +228,16 @@ export default function CreateSettlement() {
                 type="submit"
                 variant="contained"
                 disabled={loading}
-                className="flex-1 bg-green-600 hover:bg-green-700"
+                className="flex-1"
                 sx={{
                   textTransform: "none",
-                  backgroundColor: "rgb(34, 197, 94)",
+                  borderRadius: "0.75rem",
+                  fontWeight: 500,
+                  height: "44px",
+                  backgroundColor: "black",
+                  color: "white",
                   "&:hover": {
-                    backgroundColor: "rgb(21, 128, 61)",
+                    backgroundColor: "#333", // softer black on hover
                   },
                 }}
                 startIcon={

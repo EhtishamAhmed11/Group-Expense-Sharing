@@ -180,8 +180,8 @@ const Dashboard = () => {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gray-100 p-6">
-      <div className="max-w-7xl mx-auto space-y-8">
+    <div className="min-h-screen bg-gray-50 p-6">
+      <div className="max-w-7xl mx-auto space-y-10">
         <header className="space-y-1">
           <Typography variant="h4" className="font-bold text-gray-900">
             Dashboard Overview
@@ -197,6 +197,7 @@ const Dashboard = () => {
           <ErrorState message={error} />
         ) : (
           <>
+            {/* Personal Expenses */}
             <Section title="Personal Expenses">
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                 <MetricCard
@@ -223,6 +224,7 @@ const Dashboard = () => {
               </div>
             </Section>
 
+            {/* Group Management */}
             <Section title="Group Management">
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                 <MetricCard
@@ -246,6 +248,7 @@ const Dashboard = () => {
               </div>
             </Section>
 
+            {/* Settlement Activity */}
             <Section title="Settlement Activity">
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
                 <MetricCard
@@ -291,13 +294,14 @@ const Dashboard = () => {
   );
 };
 
+/* Reusable Section Component */
 const Section = ({ title, children }) => (
   <motion.section
     className="space-y-4"
-    initial={{ opacity: 0, y: 8 }}
+    initial={{ opacity: 0, y: 10 }}
     whileInView={{ opacity: 1, y: 0 }}
     viewport={{ once: true, amount: 0.2 }}
-    transition={{ duration: 0.25, ease: "easeOut" }}
+    transition={{ duration: 0.3, ease: "easeOut" }}
   >
     <Typography variant="h6" className="font-semibold text-gray-800">
       {title}
@@ -306,6 +310,7 @@ const Section = ({ title, children }) => (
   </motion.section>
 );
 
+/* Reusable MetricCard */
 const MetricCard = ({ title, value, description, trend = "neutral" }) => {
   const trendConfig = {
     positive: { icon: <TrendingUp className="w-5 h-5 text-green-500" /> },
@@ -316,13 +321,13 @@ const MetricCard = ({ title, value, description, trend = "neutral" }) => {
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 6 }}
+      initial={{ opacity: 0, y: 8 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, amount: 0.3 }}
-      transition={{ duration: 0.2, ease: "easeOut" }}
-      whileHover={{ y: -2 }}
+      transition={{ duration: 0.25, ease: "easeOut" }}
+      whileHover={{ y: -3, scale: 1.01 }}
     >
-      <Card className="rounded-xl shadow-md hover:shadow-lg transition-shadow duration-300">
+      <Card className="rounded-2xl shadow-sm hover:shadow-md transition-shadow duration-300 bg-white">
         <CardContent className="p-6 space-y-2">
           <Typography variant="body2" className="text-gray-500 font-medium">
             {title}
@@ -342,6 +347,7 @@ const MetricCard = ({ title, value, description, trend = "neutral" }) => {
   );
 };
 
+/* Loading & Error States */
 const LoadingState = () => (
   <div className="flex flex-col items-center justify-center h-64 space-y-3">
     <CircularProgress size={32} />

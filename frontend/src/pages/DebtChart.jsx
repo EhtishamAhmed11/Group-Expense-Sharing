@@ -10,57 +10,39 @@ import {
   ResponsiveContainer,
   Cell,
 } from "recharts";
-import { Card, CardContent, CardHeader, Typography, Box } from "@mui/material";
+import { Card, CardContent, Typography, Box } from "@mui/material";
 import { TrendingUp, TrendingDown } from "lucide-react";
-import { motion } from "framer-motion";
-
-/*
-  Props:
-    netBalances: array of { key, label, amount }
-  This renders a modern bar chart for each entry.
-*/
 
 export default function DebtChart({ netBalances = [] }) {
   if (!Array.isArray(netBalances) || netBalances.length === 0) {
     return (
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true, amount: 0.2 }}
-        whileHover={{ y: -2 }}
-        transition={{ duration: 0.25, ease: "easeOut" }}
-      >
-        <Card className="rounded-xl shadow-sm">
-          <CardContent className="flex items-center justify-center py-12">
-            <Typography variant="body2" className="text-gray-500">
-              No data available for chart
-            </Typography>
-          </CardContent>
-        </Card>
-      </motion.div>
+      <Card className="rounded-2xl shadow-sm">
+        <CardContent className="flex items-center justify-center py-12">
+          <Typography variant="body2" color="text.secondary">
+            No data available for chart
+          </Typography>
+        </CardContent>
+      </Card>
     );
   }
 
-  const chartData = netBalances.map((n) => ({
-    name: n.label.length > 15 ? `${n.label.substring(0, 15)}...` : n.label,
-    fullName: n.label,
-    amount: n.amount,
-    absAmount: Math.abs(n.amount),
-    isPositive: n.amount >= 0,
+  const chartData = netBalances.map((n, idx) => ({
+    name:
+      n.person?.name && n.group?.name
+        ? `${n.person.name} (${n.group.name})`
+        : `Entry ${idx + 1}`,
+    amount: n.netAmount,
+    isPositive: n.netAmount >= 0,
   }));
 
-  const CustomTooltip = ({ active, payload, label }) => {
+  const CustomTooltip = ({ active, payload }) => {
     if (active && payload && payload.length) {
-      const data = payload[0].payload;
+      const d = payload[0].payload;
       return (
-        <div className="bg-white p-3 rounded-lg shadow-lg border border-gray-200">
-          <p className="font-medium text-gray-900">{data.fullName}</p>
-          <p
-            className={`text-sm ${
-              data.isPositive ? "text-green-600" : "text-red-600"
-            }`}
-          >
-            {data.isPositive ? "+" : ""}${data.amount.toFixed(2)}
+        <div className="bg-white px-3 py-2 rounded-lg shadow border border-gray-200">
+          <p className="font-medium">{d.name}</p>
+          <p className={`${d.isPositive ? "text-black" : "text-gray-600"}`}>
+            {d.isPositive ? "+" : "-"}${Math.abs(d.amount).toFixed(2)}
           </p>
         </div>
       );
@@ -69,65 +51,50 @@ export default function DebtChart({ netBalances = [] }) {
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, amount: 0.2 }}
-      whileHover={{ y: -2 }}
-      transition={{ duration: 0.25, ease: "easeOut" }}
-    >
-      <Card className="rounded-xl shadow-sm">
-        <CardHeader className="pb-2">
-          <Box className="flex items-center justify-between">
-            <Typography variant="h6" className="font-semibold">
-              Net Balances
-            </Typography>
-            <Box className="flex items-center space-x-4 text-sm">
-              <Box className="flex items-center space-x-1">
-                <TrendingUp className="w-4 h-4 text-green-600" />
-                <span className="text-green-600">You're owed</span>
-              </Box>
-              <Box className="flex items-center space-x-1">
-                <TrendingDown className="w-4 h-4 text-red-600" />
-                <span className="text-red-600">You owe</span>
-              </Box>
+    <Card className="rounded-2xl shadow-sm">
+      <CardContent>
+        <Box className="flex items-center justify-between mb-4">
+          <Typography variant="h6" className="font-semibold text-gray-900">
+            Net Balances
+          </Typography>
+          <Box className="flex items-center space-x-4 text-sm text-gray-600">
+            <Box className="flex items-center space-x-1">
+              <TrendingUp className="w-4 h-4 text-black" />
+              <span className="text-black">You're owed</span>
+            </Box>
+            <Box className="flex items-center space-x-1">
+              <TrendingDown className="w-4 h-4 text-gray-700" />
+              <span className="text-gray-700">You owe</span>
             </Box>
           </Box>
-        </CardHeader>
+        </Box>
 
-        <CardContent>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart
-              data={chartData}
-              margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis
-                dataKey="name"
-                angle={-45}
-                textAnchor="end"
-                height={80}
-                fontSize={12}
-                stroke="#666"
-              />
-              <YAxis
-                fontSize={12}
-                stroke="#666"
-                tickFormatter={(value) => `$${value}`}
-              />
-              <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="amount" radius={[4, 4, 0, 0]}>
-                {chartData.map((entry, index) => (
-                  <Cell
-                    key={`cell-${index}`}
-                    fill={entry.isPositive ? "#10b981" : "#ef4444"}
-                  />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </CardContent>
-      </Card>
-    </motion.div>
+        <ResponsiveContainer width="100%" height={300}>
+          <BarChart
+            data={chartData}
+            margin={{ top: 20, right: 20, bottom: 40 }}
+          >
+            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+            <XAxis
+              dataKey="name"
+              angle={-25}
+              textAnchor="end"
+              fontSize={12}
+              height={60}
+            />
+            <YAxis fontSize={12} tickFormatter={(v) => `$${v}`} />
+            <Tooltip content={<CustomTooltip />} />
+            <Bar dataKey="amount" radius={[6, 6, 0, 0]}>
+              {chartData.map((entry, idx) => (
+                <Cell
+                  key={idx}
+                  fill={entry.isPositive ? "#111111" : "#6b7280"}
+                />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </CardContent>
+    </Card>
   );
 }
