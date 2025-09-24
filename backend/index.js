@@ -40,12 +40,13 @@ app.get("/helper", (_, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  try {
-    console.log(`Server is listening on PORT:${PORT}`);
-    connectDB();
-    connectRedis();
-  } catch (error) {
-    console.log(`Error Starting Server:${error.message}`);
-  }
-});
+// app.listen(PORT, () => {
+//   try {
+//     console.log(`Server is listening on PORT:${PORT}`);
+//     connectDB();
+//     connectRedis();
+//   } catch (error) {
+//     console.log(`Error Starting Server:${error.message}`);
+//   }
+// });
+export default app;
