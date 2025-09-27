@@ -1,6 +1,151 @@
 import { pool } from "../connections/db.js";
 import { cacheService } from "../utils/cache.js";
 
+function calculateEqualSplit(members, totalAmount, payerId) {
+  const memberCount = members.length;
+  const amountInCents = Math.round(totalAmount * 100);
+  const baseAmountCents = Math.floor(amountInCents / memberCount);
+  const remainderCents = amountInCents % memberCount;
+
+  console.log(`Equal split: $${totalAmount} among ${memberCount} members`);
+  console.log(`Base amount: ${baseAmountCents} cents per person`);
+  console.log(`Remainder: ${remainderCents} cents to distribute`);
+
+  const participantRecords = [];
+
+  for (let i = 0; i < members.length; i++) {
+    const member = members[i];
+
+    const extraCent = i < remainderCents ? 1 : 0;
+    const memberAmountCents = baseAmountCents + extraCent;
+    const memberAmount = memberAmountCents / 100;
+    const percentage = Math.round((memberAmount / totalAmount) * 10000) / 100;
+
+    if (member.user_id === payerId) {
+      participantRecords.push({
+        userId: member.user_id,
+        role: member.role,
+        amountOwed: 0,
+        fairShare: memberAmount,
+        percentage: percentage,
+        isPayer: true,
+        netCredit: totalAmount - memberAmount,
+        explanation: `Paid $${totalAmount}, fair share $${memberAmount}, net credit: $${
+          totalAmount - memberAmount
+        }`,
+      });
+    } else {
+      participantRecords.push({
+        userId: member.user_id,
+        role: member.role,
+        amountOwed: memberAmount,
+        percentage: percentage,
+        isPayer: false,
+        netDebt: memberAmount,
+        explanation: `Owes $${memberAmount} to the payer`,
+      });
+    }
+  }
+  return participantRecords;
+}
+
+function calculateExactSplit(members, totalAmount, payerId, splitDetails) {
+  console.log(`Exact split: $${totalAmount} with custom amounts`);
+
+  const participantRecords = [];
+  let payerFairShare = 0;
+
+  const splitMap = {};
+
+  splitDetails.forEach((detail) => {
+    splitMap[detail.user_id] = parseFloat(detail.amount);
+  });
+
+  for (const member of members) {
+    const memberAmount = splitMap[member.user_id] || 0;
+    const percentage = Math.round((memberAmount / totalAmount) * 10000) / 100;
+
+    if (member.user_id === payerId) {
+      payerFairShare = memberAmount;
+
+      participantRecords.push({
+        userId: member.user_id,
+        role: member.role,
+        amountOwed: 0,
+        fairShare: memberAmount,
+        percentage: percentage,
+        isPayer: true,
+        netCredit: totalAmount - memberAmount,
+        explanation: `Paid $${totalAmount}, fair share $${memberAmount}, net credit: $${
+          totalAmount - memberAmount
+        }`,
+      });
+    } else {
+      participantRecords.push({
+        userId: member.user_id,
+        role: member.role,
+        amountOwed: memberAmount,
+        percentage: percentage,
+        isPayer: false,
+        netDebt: memberAmount,
+        explanation: `Owes $${memberAmount} to the payer (exact split)`,
+      });
+    }
+  }
+  console.log(
+    `Exact split calculated with payer fair share: $${payerFairShare}`
+  );
+  return participantRecords;
+}
+
+function calculatePercentageSplit(members, totalAmount, payerId, splitDetails) {
+  console.log(`Percentage split: $${totalAmount} with custom percentages`);
+
+  const participantRecords = [];
+  let payerFairShare = 0;
+
+  const splitMap = {};
+  splitDetails.forEach((detail) => {
+    splitMap[detail.user_id] = parseFloat(detail.percentage);
+  });
+
+  for (const member of members) {
+    const percentage = splitMap[member.user_id] || 0;
+    const memberAmount =
+      Math.round(((totalAmount * percentage) / 100) * 100) / 100;
+
+    if (member.user_id === payerId) {
+      payerFairShare = memberAmount;
+      participantRecords.push({
+        userId: member.user_id,
+        role: member.role,
+        amountOwed: 0,
+        fairShare: memberAmount,
+        percentage: percentage,
+        isPayer: true,
+        netCredit: totalAmount - memberAmount,
+        explanation: `Paid $${totalAmount}, fair share $${memberAmount} (${percentage}%), net credit: $${
+          totalAmount - memberAmount
+        }`,
+      });
+    } else {
+      participantRecords.push({
+        userId: member.user_id,
+        role: member.role,
+        amountOwed: memberAmount,
+        percentage: percentage,
+        isPayer: false,
+        netDebt: memberAmount,
+        explanation: `Owes $${memberAmount} (${percentage}%) to the payer`,
+      });
+    }
+  }
+  console.log(
+    `Percentage split calculated with payer fair share: $${payerFairShare} (${splitMap[payerId]}%)`
+  );
+  return participantRecords;
+}
+
 export const createGroupExpense = async (req, res) => {
   let client;
   try {
@@ -11,6 +156,7 @@ export const createGroupExpense = async (req, res) => {
       group_id,
       expense_type = "group",
       split_type = "equal",
+      split_details = null,
     } = req.body;
 
     const userId = req.userId;
@@ -48,8 +194,18 @@ export const createGroupExpense = async (req, res) => {
       });
     }
 
-    client = await pool.connect();
+    const validSplitTypes = ["equal", "exact", "percentage"];
+    if (!validSplitTypes.includes(split_type)) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid split_type. Must be one of: ${validSplitTypes.join(
+          ", "
+        )}`,
+        timestamp: new Date().toISOString(),
+      });
+    }
 
+    client = await pool.connect();
     await client.query("BEGIN");
 
     const getMembersQuery = `
@@ -71,16 +227,7 @@ export const createGroupExpense = async (req, res) => {
 
     const members = memberResult.rows;
     const memberCount = members.length;
-    console.log(`Found ${memberCount} active members in group ${group_id}`);
     const memberIds = members.map((member) => member.user_id);
-    try {
-      await cacheService.invalidateDebtCaches(memberIds);
-      console.log(
-        `Invalidated debt caches for ${memberIds.length} users after expense creation`
-      );
-    } catch (cacheError) {
-      console.log(`Debt cache invalidation error: ${cacheError.message}`);
-    }
 
     const isCreatorMember = members.some((member) => member.user_id === userId);
     if (!isCreatorMember) {
@@ -90,6 +237,99 @@ export const createGroupExpense = async (req, res) => {
         message: "You must be a member of the group to create expenses",
         timestamp: new Date().toISOString(),
       });
+    }
+
+    console.log(`Found ${memberCount} active members in group ${group_id}`);
+
+    if (split_type !== "equal") {
+      if (!split_details || !Array.isArray(split_details)) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({
+          success: false,
+          message: "split_details array is required for non-equal splits",
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      if (split_details.length !== memberCount) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({
+          success: false,
+          message: `split_details must include all ${memberCount} group members`,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      for (const detail of split_details) {
+        if (!detail.user_id) {
+          await client.query("ROLLBACK");
+          return res.status(400).json({
+            success: false,
+            message: "Each split_detail must have a user_id",
+            timestamp: new Date().toISOString(),
+          });
+        }
+
+        const isMember = members.some(
+          (member) => member.user_id === detail.user_id
+        );
+        if (!isMember) {
+          await client.query("ROLLBACK");
+          return res.status(400).json({
+            success: false,
+            message: `User ${detail.user_id} is not an active group member`,
+            timestamp: new Date().toISOString(),
+          });
+        }
+      }
+
+      if (split_type === "exact") {
+        let totalSplitAmount = 0;
+        for (const detail of split_details) {
+          if (!detail.amount || detail.amount <= 0) {
+            await client.query("ROLLBACK");
+            return res.status(400).json({
+              success: false,
+              message: "All amounts in split_details must be greater than 0",
+              timestamp: new Date().toISOString(),
+            });
+          }
+          totalSplitAmount += parseFloat(detail.amount);
+        }
+
+        if (Math.abs(totalSplitAmount - totalAmount) > 0.01) {
+          await client.query("ROLLBACK");
+          return res.status(400).json({
+            success: false,
+            message: `Sum of split amounts ($${totalSplitAmount}) must equal total amount ($${totalAmount})`,
+            timestamp: new Date().toISOString(),
+          });
+        }
+      } else if (split_type === "percentage") {
+        let totalPercentage = 0;
+        for (const detail of split_details) {
+          if (!detail.percentage || detail.percentage <= 0) {
+            await client.query("ROLLBACK");
+            return res.status(400).json({
+              success: false,
+              message:
+                "All percentages in split_details must be greater than 0",
+              timestamp: new Date().toISOString(),
+            });
+          }
+          totalPercentage += parseFloat(detail.percentage);
+        }
+
+        // Check if percentages sum to 100
+        if (Math.abs(totalPercentage - 100) > 0.01) {
+          await client.query("ROLLBACK");
+          return res.status(400).json({
+            success: false,
+            message: `Sum of percentages (${totalPercentage}%) must equal 100%`,
+            timestamp: new Date().toISOString(),
+          });
+        }
+      }
     }
 
     let categoryId = null;
@@ -158,10 +398,6 @@ export const createGroupExpense = async (req, res) => {
         });
       }
 
-      console.log(
-        `Single participant expense: ${userId} paid $${totalAmount} for themselves`
-      );
-
       const singleParticipantQuery = `
         INSERT INTO expense_participants (
           expense_id, user_id, amount_owed, percentage, is_settle, created_at
@@ -204,7 +440,7 @@ export const createGroupExpense = async (req, res) => {
           splitDetails: {
             totalAmount: totalAmount,
             participantCount: 1,
-            splitType: "equal",
+            splitType: split_type,
             participants: [
               {
                 userId: singleMember.user_id,
@@ -215,14 +451,6 @@ export const createGroupExpense = async (req, res) => {
                 isSettled: true,
               },
             ],
-            note: "Single participant - no actual debts created",
-          },
-          summary: {
-            totalParticipants: 1,
-            averageAmount: totalAmount,
-            createdBy: userId,
-            debtRelationships: 0,
-            isPersonalExpense: true,
           },
         },
         timestamp: new Date().toISOString(),
@@ -230,42 +458,42 @@ export const createGroupExpense = async (req, res) => {
     }
 
     console.log(
-      `Multiple participants: ${memberCount} total, creating debts for ${
-        memberCount - 1
-      } debtors`
+      `Multiple participants: ${memberCount} total, calculating ${split_type} split`
     );
 
-    const amountInCents = Math.round(totalAmount * 100);
-    const baseAmountCents = Math.floor(amountInCents / memberCount);
-    const remainderCents = amountInCents % memberCount;
+    let participantCalculations = [];
 
-    console.log(`Splitting $${totalAmount} among ${memberCount} members`);
-    console.log(`Base amount: ${baseAmountCents} cents per person`);
-    console.log(`Remainder: ${remainderCents} cents to distribute`);
-
-    let payerIndex = -1;
-    for (let i = 0; i < members.length; i++) {
-      if (members[i].user_id === userId) {
-        payerIndex = i;
+    // Calculation based on split_type
+    switch (split_type) {
+      case "equal":
+        participantCalculations = calculateEqualSplit(
+          members,
+          totalAmount,
+          userId
+        );
         break;
-      }
+      case "exact":
+        participantCalculations = calculateExactSplit(
+          members,
+          totalAmount,
+          userId,
+          split_details
+        );
+        break;
+      case "percentage":
+        participantCalculations = calculatePercentageSplit(
+          members,
+          totalAmount,
+          userId,
+          split_details
+        );
+        break;
+      default:
+        throw new Error(`Unsupported split_type: ${split_type}`);
     }
-
-    if (payerIndex === -1) {
-      await client.query("ROLLBACK");
-      return res.status(400).json({
-        success: false,
-        message: "Expense creator must be a member of the group",
-        timestamp: new Date().toISOString(),
-      });
-    }
-
-    const payerExtraCent = payerIndex < remainderCents ? 1 : 0;
-    const payerAmountCents = baseAmountCents + payerExtraCent;
-    const payerFairShare = payerAmountCents / 100;
 
     console.log(
-      `Payer's fair share would be: $${payerFairShare} (but they don't owe it)`
+      `Calculated splits for ${participantCalculations.length} participants`
     );
 
     const participantInsertQuery = `
@@ -274,59 +502,27 @@ export const createGroupExpense = async (req, res) => {
       ) VALUES ($1, $2, $3, $4, false, CURRENT_TIMESTAMP)
     `;
 
-    const participantRecords = [];
     let totalDebtCreated = 0;
+    let payerFairShare = 0;
 
-    for (let i = 0; i < members.length; i++) {
-      const member = members[i];
-
-      const extraCent = i < remainderCents ? 1 : 0;
-      const memberAmountCents = baseAmountCents + extraCent;
-      const memberAmount = memberAmountCents / 100;
-      const percentage = Math.round((memberAmount / totalAmount) * 10000) / 100;
-
-      if (member.user_id === userId) {
-        participantRecords.push({
-          userId: member.user_id,
-          role: member.role,
-          amountOwed: 0, // Payer owes nothing
-          fairShare: memberAmount, // What they would owe (us k hisse me jo amount bnti thi )
-          percentage: percentage,
-          isPayer: true,
-          netCredit: totalAmount - memberAmount,
-          explanation: `Paid $${totalAmount}, fair share $${memberAmount}, net credit: $${
-            totalAmount - memberAmount
-          }`,
-        });
-
+    for (const participant of participantCalculations) {
+      if (participant.isPayer) {
+        payerFairShare = participant.fairShare;
         console.log(
-          `PAYER ${
-            member.user_id
-          }: Fair share $${memberAmount}, actual debt $0, net credit $${
-            totalAmount - memberAmount
-          }`
+          `PAYER ${participant.userId}: Fair share $${participant.fairShare}, actual debt $0, net credit $${participant.netCredit}`
         );
       } else {
+        // Insert debt record for non-payers
         await client.query(participantInsertQuery, [
           expenseId,
-          member.user_id,
-          memberAmount,
-          percentage,
+          participant.userId,
+          participant.amountOwed,
+          participant.percentage,
         ]);
 
-        participantRecords.push({
-          userId: member.user_id,
-          role: member.role,
-          amountOwed: memberAmount,
-          percentage: percentage,
-          isPayer: false,
-          netDebt: memberAmount,
-          explanation: `Owes $${memberAmount} to the payer`,
-        });
-
-        totalDebtCreated += memberAmount;
+        totalDebtCreated += participant.amountOwed;
         console.log(
-          `DEBTOR ${member.user_id}: owes $${memberAmount} (${percentage}%) to payer`
+          `DEBTOR ${participant.userId}: owes $${participant.amountOwed} (${participant.percentage}%) to payer`
         );
       }
     }
@@ -340,7 +536,7 @@ export const createGroupExpense = async (req, res) => {
       );
     }
 
-    const allAmountsSum = participantRecords.reduce((sum, p) => {
+    const allAmountsSum = participantCalculations.reduce((sum, p) => {
       return sum + (p.isPayer ? p.fairShare : p.amountOwed);
     }, 0);
 
@@ -351,35 +547,20 @@ export const createGroupExpense = async (req, res) => {
       );
     }
 
-    console.log(`✅ Verification passed:`);
+    console.log(` Verification passed:`);
     console.log(`  - Total expense: $${totalAmount}`);
     console.log(`  - Payer fair share: $${payerFairShare}`);
     console.log(`  - Total debt created: $${totalDebtCreated}`);
     console.log(`  - Payer net credit: $${totalAmount - payerFairShare}`);
-    console.log(
-      `  - Math check: $${payerFairShare} + $${totalDebtCreated} = $${
-        payerFairShare + totalDebtCreated
-      } ✅`
-    );
-
-    const debtRelationships = participantRecords
-      .filter((p) => !p.isPayer)
-      .map((p) => `${p.userId} owes payer $${p.amountOwed}`);
-
-    console.log(`Created ${debtRelationships.length} debt relationships:`);
-    debtRelationships.forEach((debt) => console.log(`  - ${debt}`));
 
     await client.query("COMMIT");
 
+    // Cache invalidation
     try {
-      const promises = [];
-
-      promises.push(cacheService.invalidateGroupCache(group_id));
-
+      const promises = [cacheService.invalidateGroupCache(group_id)];
       for (const member of members) {
         promises.push(cacheService.invalidateUserExpenseCache(member.user_id));
       }
-
       await Promise.all(promises);
       console.log(
         `Invalidated caches for group ${group_id} and ${members.length} members`
@@ -388,8 +569,8 @@ export const createGroupExpense = async (req, res) => {
       console.log(`Cache invalidation error: ${cacheError.message}`);
     }
 
-    const payerRecord = participantRecords.find((p) => p.isPayer);
-    const debtorRecords = participantRecords.filter((p) => !p.isPayer);
+    const payerRecord = participantCalculations.find((p) => p.isPayer);
+    const debtorRecords = participantCalculations.filter((p) => !p.isPayer);
 
     const responseData = {
       expense: {
@@ -408,8 +589,8 @@ export const createGroupExpense = async (req, res) => {
       splitDetails: {
         totalAmount: totalAmount,
         participantCount: memberCount,
-        splitType: "equal",
-        participants: participantRecords,
+        splitType: split_type,
+        participants: participantCalculations,
         payerInfo: payerRecord
           ? {
               userId: payerRecord.userId,
@@ -444,13 +625,13 @@ export const createGroupExpense = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: "Group expense created successfully",
+      message: `Group expense created successfully with ${split_type} split`,
       data: responseData,
       timestamp: new Date().toISOString(),
     });
 
     console.log(
-      `✅ Successfully created group expense: ${expenseId} for $${totalAmount} split among ${memberCount} members`
+      `Successfully created group expense: ${expenseId} for $${totalAmount} split among ${memberCount} members using ${split_type} method`
     );
   } catch (error) {
     if (client) {
@@ -465,6 +646,7 @@ export const createGroupExpense = async (req, res) => {
       groupId: req.body.group_id,
       userId: req.userId,
       amount: req.body.amount,
+      splitType: req.body.split_type,
       stack: error.stack,
     });
 
