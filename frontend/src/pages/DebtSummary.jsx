@@ -104,6 +104,7 @@ export default function DebtSummary() {
         credentials: "include",
       });
       const json = await res.json();
+      console.log(json)
       if (!json.success) throw new Error(json.message || "Failed to load");
       setData(json.data);
     } catch (err) {

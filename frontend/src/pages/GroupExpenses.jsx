@@ -1,20 +1,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import {
   Card,
   CardContent,
   CardHeader,
   Typography,
-  Button,
   TextField,
   Grid,
   Chip,
   CircularProgress,
   Box,
   Pagination,
+  Button,
 } from "@mui/material";
 import {
   Plus,
@@ -29,12 +29,10 @@ import { format } from "date-fns";
 import { motion } from "framer-motion";
 import toast from "react-hot-toast";
 
-// ✅ Import your CreateExpense Dialog
-import CreateExpense from "./createExpense";
-
 const GroupExpenses = () => {
   const { groupId } = useParams();
   const { user } = useAuth();
+  const navigate = useNavigate();
 
   const [expenses, setExpenses] = useState([]);
   const [summary, setSummary] = useState(null);
@@ -62,18 +60,14 @@ const GroupExpenses = () => {
     totalExpenses: 0,
   });
 
-  // ✅ Control CreateExpense Dialog
-  const [openExpenseDialog, setOpenExpenseDialog] = useState(false);
+  const [members, setMembers] = useState([]);
+  const [categoryOptions, setCategoryOptions] = useState([]);
 
+  // ✅ Fetch expenses
   const fetchExpenses = async () => {
     try {
       setLoading(true);
-      const params = new URLSearchParams({
-        page,
-        limit,
-        search,
-        ...filters,
-      });
+      const params = new URLSearchParams({ page, limit, search, ...filters });
 
       const res = await fetch(
         `http://localhost:3005/api/group-expense/${groupId}/expenses?${params.toString()}`,
@@ -84,10 +78,15 @@ const GroupExpenses = () => {
       );
 
       const data = await res.json();
+      console.log("Fetched expenses:", data);
+
       if (data.success) {
         setExpenses(data.data.expenses || []);
         setSummary(data.data.summary || null);
-        if (data.data.pagination) setPagination(data.data.pagination);
+        if (data.data.pagination) {
+          setPagination(data.data.pagination);
+          setPage(data.data.pagination.currentPage);
+        }
       } else {
         toast.error("Failed to fetch expenses");
       }
@@ -99,21 +98,49 @@ const GroupExpenses = () => {
     }
   };
 
+  // ✅ Fetch group members & categories
+  const fetchGroupDetails = async () => {
+    try {
+      const [membersRes, categoriesRes] = await Promise.all([
+        fetch(`http://localhost:3005/api/groups/members/${groupId}`, {
+          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+          credentials: "include",
+        }),
+        fetch(`http://localhost:3005/api/expense/get-categories`, {
+          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+          credentials: "include",
+        }),
+      ]);
+
+      const membersData = await membersRes.json();
+      const categoriesData = await categoriesRes.json();
+
+      if (membersData.success) {
+        setMembers(membersData.data || []);
+      }
+
+      if (categoriesData.success) {
+        const categories = Array.isArray(categoriesData.data?.categories)
+          ? categoriesData.data.categories
+          : [];
+        setCategoryOptions(categories);
+      }
+    } catch (err) {
+      console.error("Error fetching group details:", err);
+    }
+  };
+
   useEffect(() => {
-    if (groupId) fetchExpenses();
+    if (groupId) {
+      fetchExpenses();
+      fetchGroupDetails();
+    }
   }, [groupId, page, search, filters]);
 
   const handleFilterChange = (e) => {
     setFilters((prev) => ({ ...prev, [e.target.name]: e.target.value }));
     setPage(1);
   };
-
-  const handleSearchChange = (e) => {
-    setSearch(e.target.value);
-    setPage(1);
-  };
-
-  const handlePageChange = (event, newPage) => setPage(newPage);
 
   return (
     <div className="max-w-7xl mx-auto p-6">
@@ -134,16 +161,13 @@ const GroupExpenses = () => {
         <Button
           variant="outlined"
           startIcon={<Plus className="w-4 h-4" />}
-          onClick={() => setOpenExpenseDialog(true)} // ✅ Open dialog
+          onClick={() => navigate(`/groups/${groupId}/expenses/create`)}
           sx={{
             borderColor: "black",
             color: "black",
             textTransform: "none",
             fontWeight: "bold",
-            "&:hover": {
-              bgcolor: "black",
-              color: "white",
-            },
+            "&:hover": { bgcolor: "black", color: "white" },
           }}
         >
           Add New Expense
@@ -160,7 +184,10 @@ const GroupExpenses = () => {
                 fullWidth
                 placeholder="Search expenses..."
                 value={search}
-                onChange={handleSearchChange}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setPage(1);
+                }}
                 InputProps={{
                   startAdornment: (
                     <Search className="w-4 h-4 text-gray-400 mr-2" />
@@ -220,6 +247,7 @@ const GroupExpenses = () => {
         </CardContent>
       </Card>
 
+      {/* Expenses */}
       {loading ? (
         <Box className="flex items-center justify-center min-h-64 py-12">
           <CircularProgress />
@@ -238,7 +266,7 @@ const GroupExpenses = () => {
                   <Grid item xs={6} sm={3}>
                     <Box className="text-center">
                       <Typography variant="h5" className="font-bold text-black">
-                        {summary.totalExpenses}
+                        {summary?.totalExpenses ?? 0}
                       </Typography>
                       <Typography variant="body2" className="text-gray-600">
                         Total Expenses
@@ -248,7 +276,7 @@ const GroupExpenses = () => {
                   <Grid item xs={6} sm={3}>
                     <Box className="text-center">
                       <Typography variant="h5" className="font-bold text-black">
-                        ${summary.totalAmount}
+                        ${summary?.totalAmount ?? 0}
                       </Typography>
                       <Typography variant="body2" className="text-gray-600">
                         Total Amount
@@ -258,7 +286,7 @@ const GroupExpenses = () => {
                   <Grid item xs={6} sm={3}>
                     <Box className="text-center">
                       <Typography variant="h5" className="font-bold text-black">
-                        ${summary.totalUnsettled}
+                        ${summary?.totalUnsettled ?? 0}
                       </Typography>
                       <Typography variant="body2" className="text-gray-600">
                         Unsettled Amount
@@ -268,7 +296,7 @@ const GroupExpenses = () => {
                   <Grid item xs={6} sm={3}>
                     <Box className="text-center">
                       <Typography variant="h5" className="font-bold text-black">
-                        ${summary.averageExpense}
+                        ${summary?.averageExpense ?? 0}
                       </Typography>
                       <Typography variant="body2" className="text-gray-600">
                         Average Expense
@@ -293,10 +321,10 @@ const GroupExpenses = () => {
                   title={
                     <Box className="flex items-center justify-between">
                       <Typography variant="h6" className="font-semibold">
-                        {exp.description}
+                        {exp?.description ?? "No Description"}
                       </Typography>
                       <Typography variant="h6" className="font-bold text-black">
-                        ${exp.amount}
+                        ${exp?.amount ?? "0.00"}
                       </Typography>
                     </Box>
                   }
@@ -304,13 +332,19 @@ const GroupExpenses = () => {
                     <Box className="flex flex-wrap gap-3 mt-2 items-center">
                       <Chip
                         icon={<Tag className="w-4 h-4" />}
-                        label={exp.category_name || "No Category"}
+                        label={exp?.category_name ?? "No Category"}
                         size="small"
-                        variant="outlined"
+                        sx={{
+                          bgcolor: exp?.category_color ?? "transparent",
+                          color: exp?.category_color ? "white" : "black",
+                          border: "1px solid black",
+                        }}
                       />
                       <Chip
                         icon={<User className="w-4 h-4" />}
-                        label={`Paid by: ${exp.payer_first_name} ${exp.payer_last_name}`}
+                        label={`Paid by: ${exp?.payer_first_name ?? ""} ${
+                          exp?.payer_last_name ?? ""
+                        }`}
                         size="small"
                         sx={{
                           borderColor: "black",
@@ -320,7 +354,11 @@ const GroupExpenses = () => {
                       />
                       <Chip
                         icon={<Calendar className="w-4 h-4" />}
-                        label={format(new Date(exp.expense_date), "PP")}
+                        label={
+                          exp?.expense_date
+                            ? format(new Date(exp.expense_date), "PP")
+                            : "No Date"
+                        }
                         size="small"
                         sx={{
                           borderColor: "black",
@@ -330,15 +368,15 @@ const GroupExpenses = () => {
                       />
                       <Chip
                         icon={<DollarSign className="w-4 h-4" />}
-                        label={exp.is_settled ? "Settled" : "Pending"}
+                        label={exp?.is_settled ? "Settled" : "Pending"}
                         size="small"
                         sx={{
-                          bgcolor: exp.is_settled ? "black" : "white",
-                          color: exp.is_settled ? "white" : "black",
+                          bgcolor: exp?.is_settled ? "black" : "white",
+                          color: exp?.is_settled ? "white" : "black",
                           border: "1px solid black",
                         }}
                       />
-                      {exp.split_type && (
+                      {exp?.split_type && (
                         <Chip
                           label={`Split: ${exp.split_type}`}
                           size="small"
@@ -349,12 +387,12 @@ const GroupExpenses = () => {
                   }
                 />
                 <CardContent>
-                  {exp.notes && (
+                  {exp?.notes && (
                     <Typography variant="body2" className="text-gray-600 mb-2">
                       Notes: {exp.notes}
                     </Typography>
                   )}
-                  {exp.category_description && (
+                  {exp?.category_description && (
                     <Typography variant="body2" className="text-gray-500">
                       Category Details: {exp.category_description}
                     </Typography>
@@ -365,12 +403,12 @@ const GroupExpenses = () => {
           ))}
 
           {/* Pagination */}
-          {pagination.totalPages > 1 && (
+          {pagination?.totalPages > 1 && (
             <Box className="flex justify-center mt-6">
               <Pagination
                 count={pagination.totalPages}
-                page={pagination.currentPage}
-                onChange={handlePageChange}
+                page={page}
+                onChange={(e, newPage) => setPage(newPage)}
                 sx={{
                   "& .MuiPaginationItem-root": {
                     color: "black",
@@ -386,15 +424,6 @@ const GroupExpenses = () => {
           )}
         </>
       )}
-
-      {/* ✅ CreateExpense Dialog */}
-      <CreateExpense
-        open={openExpenseDialog}
-        onClose={() => {
-          setOpenExpenseDialog(false);
-          fetchExpenses(); // refresh list after adding
-        }}
-      />
     </div>
   );
 };
