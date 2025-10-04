@@ -27,6 +27,7 @@ import ConfirmSettlement from "./pages/ConfirmSettlement";
 import SettlementHistory from "./pages/SettlementHistory";
 import SettlementDetails from "./pages/SettlementDetails";
 import CreateSettlement from "./pages/CreateSettlement";
+import { SettlementsProvider } from "./context/SettlementsContext";
 
 const theme = createTheme({
   palette: {
@@ -206,7 +207,7 @@ const AppContent = () => {
           }
         />
         <Route
-          path="/settlements/create"
+          path="/settlements/settle/create/:groupId/:toUserId"
           element={
             <ProtectedRoute>
               <CreateSettlement />
@@ -227,11 +228,13 @@ const App = () => {
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <AuthProvider>
-        <Router>
-          <div style={{ fontFamily: "Arial, sans-serif" }}>
-            <AppContent />
-          </div>
-        </Router>
+        <SettlementsProvider>
+          <Router>
+            <div style={{ fontFamily: "Arial, sans-serif" }}>
+              <AppContent />
+            </div>
+          </Router>
+        </SettlementsProvider>
       </AuthProvider>
     </ThemeProvider>
   );

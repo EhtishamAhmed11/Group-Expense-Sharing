@@ -4,10 +4,19 @@
 import { useState, useEffect, useMemo } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useLocation } from "react-router-dom";
-import { Card, CardContent, Typography, CircularProgress } from "@mui/material";
+import {
+  Card,
+  CardContent,
+  Typography,
+  CircularProgress,
+  Box,
+  Divider,
+  Button,
+} from "@mui/material";
 import { TrendingUp, TrendingDown, AlertTriangle, Info } from "lucide-react";
-import { motion } from "motion/react";
+import { motion } from "framer-motion";
 import { format } from "date-fns";
+import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
 
 const API_BASE_URL = "http://localhost:3005/api";
 
@@ -43,9 +52,7 @@ const Dashboard = () => {
       ] = await Promise.all([
         fetch(
           `${API_BASE_URL}/expense/get-expenses?limit=100&dateFrom=${dateFrom}&dateTo=${dateTo}`,
-          {
-            credentials: "include",
-          }
+          { credentials: "include" }
         ),
         fetch(`${API_BASE_URL}/expense/get-expenses?limit=1000`, {
           credentials: "include",
@@ -101,21 +108,13 @@ const Dashboard = () => {
         0
       );
 
-      const upcomingRecurring = recurring.filter((exp) => {
-        if (!exp.nextDueDate) return false;
-        const dueDate = new Date(exp.nextDueDate);
-        const today = new Date();
-        const daysDiff = Math.ceil((dueDate - today) / (1000 * 60 * 60 * 24));
-        return daysDiff >= 0 && daysDiff <= 7;
-      });
-
       setDashboardData({
         totalExpenses,
         monthlyTotal,
         categoriesCount: categories.length,
         recurringCount: recurring.length,
         recentExpenses: recent.slice(0, 5),
-        upcomingRecurring,
+        categoriesData: categories,
       });
 
       // Groups
@@ -181,7 +180,7 @@ const Dashboard = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-7xl mx-auto space-y-10">
+      <div className="max-w-7xl mx-auto space-y-12">
         <header className="space-y-1">
           <Typography variant="h4" className="font-bold text-gray-900">
             Dashboard Overview
@@ -198,7 +197,10 @@ const Dashboard = () => {
         ) : (
           <>
             {/* Personal Expenses */}
-            <Section title="Personal Expenses">
+            <Section
+              title="Personal Expenses"
+              subtitle="Overview of your spending this month"
+            >
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                 <MetricCard
                   title="Total Expenses"
@@ -222,71 +224,134 @@ const Dashboard = () => {
                   description="Active recurring"
                 />
               </div>
+
+              {/* Category Pie Chart */}
+              {dashboardData.categoriesData.length > 0 && (
+                <Box className="mt-6 bg-white rounded-2xl shadow-sm p-4">
+                  <Typography
+                    variant="subtitle1"
+                    className="font-semibold text-gray-800 mb-2"
+                  >
+                    Category Distribution
+                  </Typography>
+                  <ResponsiveContainer width="100%" height={200}>
+                    <PieChart>
+                      <Pie
+                        data={dashboardData.categoriesData.map((c) => ({
+                          name: c.name,
+                          value: c.totalAmount || 1,
+                        }))}
+                        dataKey="value"
+                        nameKey="name"
+                        outerRadius={70}
+                        innerRadius={40}
+                        paddingAngle={3}
+                      >
+                        {dashboardData.categoriesData.map((_, idx) => (
+                          <Cell key={idx} fill={getColor(idx)} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        content={({ active, payload }) => {
+                          if (active && payload && payload.length) {
+                            const d = payload[0].payload;
+                            return (
+                              <div className="bg-white border rounded-lg shadow px-3 py-2">
+                                <p className="text-gray-900 font-medium">
+                                  {d.name}
+                                </p>
+                                <p className="text-sm text-gray-600">
+                                  ${d.value}
+                                </p>
+                              </div>
+                            );
+                          }
+                          return null;
+                        }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </Box>
+              )}
             </Section>
+
+
 
             {/* Group Management */}
-            <Section title="Group Management">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                <MetricCard
-                  title="Total Groups"
-                  value={groupData.totalGroups}
-                  description="Joined groups"
-                />
-                <MetricCard
-                  title="Admin Of"
-                  value={groupData.adminGroups}
-                  description="Groups you manage"
-                />
-                <MetricCard
-                  title="Net Balance"
-                  value={`$${groupData.totalBalance.toFixed(2)}`}
-                  description={
-                    groupData.totalBalance >= 0 ? "You are owed" : "You owe"
-                  }
-                  trend={groupData.totalBalance >= 0 ? "positive" : "negative"}
-                />
-              </div>
-            </Section>
+            {groupData && (
+              <Section
+                title="Group Management"
+                subtitle="Your group activities and balances"
+              >
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                  <MetricCard
+                    title="Total Groups"
+                    value={groupData.totalGroups}
+                    description="Joined groups"
+                  />
+                  <MetricCard
+                    title="Admin Of"
+                    value={groupData.adminGroups}
+                    description="Groups you manage"
+                  />
+                  <MetricCard
+                    title="Net Balance"
+                    value={`$${groupData.totalBalance.toFixed(2)}`}
+                    description={
+                      groupData.totalBalance >= 0 ? "You are owed" : "You owe"
+                    }
+                    trend={
+                      groupData.totalBalance >= 0 ? "positive" : "negative"
+                    }
+                  />
+                </div>
+              </Section>
+            )}
 
-            {/* Settlement Activity */}
-            <Section title="Settlement Activity">
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
-                <MetricCard
-                  title="Total Settlements"
-                  value={settlementData.totalSettlements}
-                  description="All time"
-                />
-                <MetricCard
-                  title="Total Amount"
-                  value={`$${settlementData.totalAmount.toFixed(2)}`}
-                  description="All settlements"
-                />
-                <MetricCard
-                  title="Pending"
-                  value={settlementData.pendingCount}
-                  description="Awaiting confirmation"
-                  trend="warning"
-                />
-                <MetricCard
-                  title="Confirmed"
-                  value={settlementData.confirmedCount}
-                  description="Completed"
-                  trend="positive"
-                />
-                <MetricCard
-                  title="Disputed"
-                  value={settlementData.disputedCount}
-                  description="Needs resolution"
-                  trend="negative"
-                />
-                <MetricCard
-                  title="Action Required"
-                  value={settlementData.actionRequiredCount}
-                  description="Your attention needed"
-                  trend="warning"
-                />
-              </div>
-            </Section>
+            {/* Settlements */}
+            {settlementData && (
+              <Section
+                title="Settlement Activity"
+                subtitle="Track your settlements status"
+              >
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
+                  <MetricCard
+                    title="Total Settlements"
+                    value={settlementData.totalSettlements}
+                    description="All time"
+                  />
+                  <MetricCard
+                    title="Total Amount"
+                    value={`$${settlementData.totalAmount.toFixed(2)}`}
+                    description="All settlements"
+                  />
+                  <MetricCard
+                    title="Pending"
+                    value={settlementData.pendingCount}
+                    description="Awaiting confirmation"
+                    trend="warning"
+                  />
+                  <MetricCard
+                    title="Confirmed"
+                    value={settlementData.confirmedCount}
+                    description="Completed"
+                    trend="positive"
+                  />
+                  <MetricCard
+                    title="Disputed"
+                    value={settlementData.disputedCount}
+                    description="Needs resolution"
+                    trend="negative"
+                  />
+                  <MetricCard
+                    title="Action Required"
+                    value={settlementData.actionRequiredCount}
+                    description="Your attention needed"
+                    trend="warning"
+                  />
+                </div>
+              </Section>
+            )}
           </>
         )}
       </div>
@@ -295,7 +360,7 @@ const Dashboard = () => {
 };
 
 /* Reusable Section Component */
-const Section = ({ title, children }) => (
+const Section = ({ title, subtitle, children }) => (
   <motion.section
     className="space-y-4"
     initial={{ opacity: 0, y: 10 }}
@@ -306,6 +371,11 @@ const Section = ({ title, children }) => (
     <Typography variant="h6" className="font-semibold text-gray-800">
       {title}
     </Typography>
+    {subtitle && (
+      <Typography variant="body2" className="text-gray-500">
+        {subtitle}
+      </Typography>
+    )}
     {children}
   </motion.section>
 );
@@ -365,5 +435,19 @@ const ErrorState = ({ message }) => (
     </Typography>
   </div>
 );
+
+/* Color palette for PieChart */
+const getColor = (idx) => {
+  const palette = [
+    "#4ade80",
+    "#f87171",
+    "#facc15",
+    "#60a5fa",
+    "#f472b6",
+    "#a78bfa",
+    "#fbbf24",
+  ];
+  return palette[idx % palette.length];
+};
 
 export default Dashboard;

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useParams } from "react-router-dom";
 import {
   Card,
   CardContent,
@@ -21,7 +22,12 @@ import { DollarSign, FileText, CreditCard } from "lucide-react";
 import toast from "react-hot-toast";
 import { motion } from "framer-motion";
 
-const SettleDebt = ({ groupId, toUserId }) => {
+const API_BASE_URL = "http://localhost:3005/api";
+
+const SettleDebt = () => {
+  const { groupId, toUserId } = useParams(); // ✅ get IDs from URL
+  console.log(toUserId)
+  
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [method, setMethod] = useState("cash");
@@ -36,16 +42,22 @@ const SettleDebt = ({ groupId, toUserId }) => {
       return;
     }
 
+    if (!groupId || !toUserId) {
+      toast.error("Missing group or user ID");
+      return;
+    }
+
     setLoading(true);
     try {
       const res = await fetch(
-        `http://localhost:3005/api/settlements/settle/${groupId}/${toUserId}`,
+        `${API_BASE_URL}/settlements/settle/${groupId}/${toUserId}`,
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${localStorage.getItem("token")}`,
           },
+          credentials: "include",
           body: JSON.stringify({
             amount,
             description,

@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useMemo } from "react";
 import { Link } from "react-router-dom";
+import dayjs from "dayjs";
 import {
   Card,
   CardContent,
@@ -22,36 +23,12 @@ import {
 } from "@mui/material";
 import { History, Eye, TrendingUp, TrendingDown, Clock } from "lucide-react";
 import { motion } from "framer-motion";
-import toast from "react-hot-toast";
-
-const API_URL = "http://localhost:3005/api/settlements/settlements";
+import { useSettlements } from "../context/SettlementsContext";
 
 const SettlementHistory = () => {
-  const [settlements, setSettlements] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { settlements, loading } = useSettlements();
 
-  const fetchHistory = async () => {
-    try {
-      setLoading(true);
-      const res = await fetch(API_URL, {
-        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-        credentials: "include",
-      });
-      const data = await res.json();
-      if (data.success) setSettlements(data.data.settlements || []);
-      else toast.error("Failed to fetch settlement history");
-    } catch (err) {
-      console.error(err);
-      toast.error("Error fetching settlement history");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchHistory();
-  }, []);
-
+  // Status color & icon helpers
   const getStatusColor = (status) => {
     switch (status) {
       case "confirmed":
@@ -78,6 +55,23 @@ const SettlementHistory = () => {
     }
   };
 
+  // Filter settlements
+  const { incoming, outgoing, confirmed } = useMemo(() => {
+    const incomingList = settlements.filter(
+      (s) => s.direction === "incoming" && s.status === "pending"
+    );
+    const outgoingList = settlements.filter(
+      (s) => s.direction === "outgoing" && s.status === "pending"
+    );
+    const confirmedList = settlements.filter((s) => s.status === "confirmed");
+    return {
+      incoming: incomingList,
+      outgoing: outgoingList,
+      confirmed: confirmedList,
+    };
+  }, [settlements]);
+
+  // Render table
   const renderSettlementTable = (list, title, icon) => (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -88,7 +82,7 @@ const SettlementHistory = () => {
         <CardHeader
           title={
             <Box className="flex items-center gap-2">
-              {icon}{" "}
+              {icon}
               <Typography variant="h6" className="font-semibold text-gray-800">
                 {title}
               </Typography>
@@ -144,7 +138,10 @@ const SettlementHistory = () => {
                           variant="body2"
                           className="font-medium text-gray-800"
                         >
-                          {s.displayText}
+                          {s.displayText.replace(
+                            s.groupId,
+                            s.group?.name || "N/A"
+                          )}
                         </Typography>
                       </TableCell>
                       <TableCell>
@@ -165,9 +162,12 @@ const SettlementHistory = () => {
                         />
                       </TableCell>
                       <TableCell>
-                        <Typography variant="body2" className="text-gray-600">
-                          {s.createdAt
-                            ? new Date(s.createdAt).toLocaleDateString()
+                        <Typography
+                          variant="body2"
+                          className="font-medium text-gray-600"
+                        >
+                          {s.dates?.createdAt
+                            ? dayjs(s.dates.createdAt).format("MMM D, YYYY")
                             : "-"}
                         </Typography>
                       </TableCell>
@@ -194,7 +194,7 @@ const SettlementHistory = () => {
     </motion.div>
   );
 
-  if (loading) {
+  if (loading)
     return (
       <Box className="flex flex-col items-center justify-center min-h-64 py-16">
         <CircularProgress />
@@ -203,22 +203,13 @@ const SettlementHistory = () => {
         </Typography>
       </Box>
     );
-  }
-
-  const incoming = settlements.filter(
-    (s) => s.direction === "incoming" && s.status === "pending"
-  );
-  const outgoing = settlements.filter(
-    (s) => s.direction === "outgoing" && s.status === "pending"
-  );
-  const confirmed = settlements.filter((s) => s.status === "confirmed");
 
   return (
     <Container maxWidth="lg" className="py-10">
-      <Box className="mb-8 text-center">
+      <Box className="mb-8">
         <Typography
           variant="h4"
-          className="font-bold flex items-center justify-center gap-3 text-gray-900"
+          className="font-bold flex items-center gap-3 text-gray-900"
         >
           <History className="w-8 h-8 text-black" /> Settlement History
         </Typography>
@@ -233,13 +224,11 @@ const SettlementHistory = () => {
           "Incoming Settlements (Waiting for You)",
           <TrendingUp className="w-5 h-5 text-green-600" />
         )}
-
         {renderSettlementTable(
           outgoing,
           "Outgoing Settlements (Waiting for Others)",
           <TrendingDown className="w-5 h-5 text-orange-600" />
         )}
-
         {renderSettlementTable(
           confirmed,
           "Confirmed Settlements",

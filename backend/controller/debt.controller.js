@@ -201,7 +201,7 @@ FROM (
     ]);
 
     const responseData = {
-      summray: {
+      summary: {
         totalOwedToUser: parseFloat(userSummary.total_owed_to_user) || 0,
         totalUserOwes: parseFloat(userSummary.total_user_owes) || 0,
         netBalance: parseFloat(userSummary.net_balance) || 0,

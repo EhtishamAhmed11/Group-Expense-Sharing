@@ -38,6 +38,7 @@ import {
   YAxis,
   Tooltip,
   CartesianGrid,
+  Cell,
 } from "recharts";
 
 const API_BASE_URL = "http://localhost:3005/api";
@@ -104,7 +105,7 @@ export default function DebtSummary() {
         credentials: "include",
       });
       const json = await res.json();
-      console.log(json)
+      console.log(json);
       if (!json.success) throw new Error(json.message || "Failed to load");
       setData(json.data);
     } catch (err) {
@@ -121,6 +122,43 @@ export default function DebtSummary() {
   }, []);
 
   const openDetailed = (groupId) => navigate(`/debt/${groupId}/detailed`);
+  // Replace inside DebtSummary component
+
+  const handleSettleClick = async (groupId) => {
+    try {
+      setLoading(true);
+
+      const res = await fetch(`${API_BASE_URL}/groups/members/${groupId}`, {
+        credentials: "include",
+      });
+      const json = await res.json();
+
+      if (!json.success || !json.data?.members) {
+        toast.error("Failed to fetch group members");
+        return;
+      }
+
+      const members = json.data.members;
+      const currentUser = members.find((m) => m.isCurrentUser);
+      const otherMember = members.find((m) => m.id !== currentUser.id);
+
+      if (!otherMember) {
+        toast.error("No other member to settle with");
+        return;
+      }
+
+      console.log("Navigating to settle with:", otherMember.id);
+
+      // Set loading false BEFORE navigating
+      setLoading(false);
+
+      navigate(`/settlements/settle/${groupId}/${otherMember.id}`);
+    } catch (err) {
+      console.error(err);
+      toast.error("Error fetching member details");
+      setLoading(false);
+    }
+  };
 
   // ========== Loading ==========
   if (loading)
@@ -138,10 +176,24 @@ export default function DebtSummary() {
   // ========== Error ==========
   if (error)
     return (
-      <Container maxWidth="xl" className="py-12">
+      <Container
+        maxWidth="xl"
+        className="py-12 flex flex-col items-center gap-4"
+      >
         <Alert severity="error" className="rounded-lg">
           {error}
         </Alert>
+        <Button
+          variant="contained"
+          onClick={fetchSummary}
+          sx={{
+            backgroundColor: "black",
+            "&:hover": { backgroundColor: "#333" },
+            color: "white",
+          }}
+        >
+          Retry
+        </Button>
       </Container>
     );
 
@@ -158,13 +210,9 @@ export default function DebtSummary() {
   const netBalance = summary?.netBalance || 0;
 
   return (
-    <Container
-      // maxWidth="lg"
-      className="py-10"
-      sx={{ display: "flex", flexDirection: "column", alignItems: "center" }}
-    >
+    <Container className="py-10 flex flex-col items-center">
       {/* Header */}
-      <Box className="mb-10">
+      <Box className="mb-10 text-left w-full">
         {location.pathname !== "/debt" && (
           <Button
             startIcon={<ArrowLeft className="w-4 h-4" />}
@@ -187,8 +235,6 @@ export default function DebtSummary() {
           A snapshot of what you owe and what others owe you
         </Typography>
       </Box>
-
-      {/* Summary Cards */}
       <Grid container spacing={3} className="mb-10">
         <Grid item xs={12} md={4}>
           <SummaryCard
@@ -278,7 +324,11 @@ export default function DebtSummary() {
                             </Typography>
                           )}
                           <Box className="flex items-center space-x-4 text-sm text-gray-500">
-                            <span>Unsettled: {g.unsettledExpensesCount}</span>
+                            <Chip
+                              label={`Unsettled: ${g.unsettledExpensesCount}`}
+                              size="small"
+                              sx={{ borderColor: "black", color: "black" }}
+                            />
                             <Box className="flex items-center space-x-1">
                               <Calendar className="w-4 h-4" />
                               <span>
@@ -332,9 +382,7 @@ export default function DebtSummary() {
                               variant="contained"
                               startIcon={<Handshake className="w-4 h-4" />}
                               onClick={() =>
-                                navigate(
-                                  `/settlements/create?groupId=${g.groupId}`
-                                )
+                                handleSettleClick(g.groupId, g.netBalance)
                               }
                               sx={{
                                 textTransform: "none",
@@ -381,7 +429,13 @@ export default function DebtSummary() {
                 urgentDebts.map((d) => (
                   <Alert
                     key={d.expenseId}
-                    severity="warning"
+                    severity={
+                      d.daysOld > 30
+                        ? "error"
+                        : d.daysOld > 14
+                        ? "warning"
+                        : "info"
+                    }
                     className="rounded-xl border border-black"
                     icon={false}
                     sx={{ bgcolor: "transparent", color: "black" }}
@@ -543,10 +597,17 @@ export default function DebtSummary() {
                 />
                 <Bar
                   dataKey="balance"
-                  fill="black"
                   radius={[6, 6, 0, 0]}
                   label={{ position: "top", fill: "#000", fontSize: 11 }}
-                />
+                  fill="black"
+                >
+                  {groupBalances.map((g, idx) => (
+                    <Cell
+                      key={idx}
+                      fill={g.netBalance >= 0 ? "green" : "red"}
+                    />
+                  ))}
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </Card>

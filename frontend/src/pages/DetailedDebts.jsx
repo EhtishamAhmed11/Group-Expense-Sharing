@@ -13,6 +13,8 @@ import {
   Tab,
   Paper,
   Divider,
+  Avatar,
+  Chip,
 } from "@mui/material";
 import {
   ArrowLeft,
@@ -20,12 +22,35 @@ import {
   TrendingUp,
   TrendingDown,
   Users,
-  FileText,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
 import DebtChart from "./DebtChart";
+import { format, isValid, parseISO } from "date-fns";
 
 const API_BASE_URL = "http://localhost:3005/api";
+
+// Friendly labels for summary
+const summaryLabels = {
+  totalOwedToUser: "Total Owed To You",
+  totalUserOwes: "Total You Owe",
+  netBalance: "Net Balance",
+  uniqueCreditors: "Unique Creditors",
+  uniqueDebtor: "Unique Debtors",
+  totalExpenseCount: "Total Expenses",
+};
+
+// TabPanel component
+const TabPanel = ({ children, value, index }) => (
+  <motion.div
+    hidden={value !== index}
+    initial={{ opacity: 0, y: 8 }}
+    animate={value === index ? { opacity: 1, y: 0 } : {}}
+    transition={{ duration: 0.25 }}
+    className="mt-6"
+  >
+    {value === index && children}
+  </motion.div>
+);
 
 export default function DetailedDebts() {
   const { groupId } = useParams();
@@ -35,6 +60,26 @@ export default function DetailedDebts() {
   const [error, setError] = useState(null);
   const [data, setData] = useState(null);
   const [tab, setTab] = useState(0);
+  const [groupName, setGroupName] = useState("Group");
+
+  // Fetch group name
+  const fetchGroupName = async () => {
+    if (!groupId) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/groups/${groupId}`, {
+        credentials: "include",
+      });
+      const json = await res.json();
+      if (json.success && json.data.group?.name)
+        setGroupName(json.data.group.name);
+    } catch (err) {
+      console.error("Failed to fetch group name:", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchGroupName();
+  }, [groupId]);
 
   const url = groupId ? `${API_BASE_URL}/debt/${groupId}/detailed` : null;
 
@@ -61,20 +106,7 @@ export default function DetailedDebts() {
 
   useEffect(() => {
     fetchDetailed();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groupId]);
-
-  const TabPanel = ({ children, value, index }) => (
-    <motion.div
-      hidden={value !== index}
-      initial={{ opacity: 0, y: 8 }}
-      animate={value === index ? { opacity: 1, y: 0 } : {}}
-      transition={{ duration: 0.25 }}
-      className="mt-6"
-    >
-      {value === index && children}
-    </motion.div>
-  );
 
   if (loading) {
     return (
@@ -113,12 +145,20 @@ export default function DetailedDebts() {
   if (!data) return null;
 
   const {
+    summary = {},
     netBalances = {},
     peopleWhoOweUser = {},
     peopleUserOwes = {},
     settlementSuggestion = [],
-    summary = {},
   } = data;
+
+  // Format currency
+  const formatAmount = (amt) =>
+    `$${amt.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+
+  const sortedNetBalances = Object.values(netBalances).sort(
+    (a, b) => b.netAmount - a.netAmount
+  );
 
   return (
     <Container maxWidth="lg" className="py-10">
@@ -131,8 +171,8 @@ export default function DetailedDebts() {
         >
           Back
         </Button>
-        <Typography variant="h5" className="font-semibold">
-          Detailed Debts — Group {groupId}
+        <Typography variant="h5" className="font-semibold text-black">
+          Detailed Debts — {groupName}
         </Typography>
         <Button
           startIcon={<RefreshCw />}
@@ -163,128 +203,237 @@ export default function DetailedDebts() {
         <Tab label="Chart" />
       </Tabs>
 
-      {/* Panels */}
+      {/* Summary Tab */}
       <TabPanel value={tab} index={0}>
-        <Paper className="p-6 rounded-2xl shadow-sm border border-gray-200">
-          <Typography variant="h6" className="mb-4 font-semibold">
-            Summary
-          </Typography>
-          <Box className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            {Object.entries(summary).map(([k, v]) => (
-              <Box
+        <Box className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
+          {Object.entries(summary).map(([k, v]) => {
+            let bgColor = "bg-gray-50";
+            let textColor = "text-gray-800";
+            let icon = null;
+
+            switch (k) {
+              case "totalOwedToUser":
+                bgColor = "bg-green-50";
+                textColor = "text-green-800";
+                icon = <TrendingUp size={20} className="text-green-600" />;
+                break;
+              case "totalUserOwes":
+                bgColor = "bg-red-50";
+                textColor = "text-red-800";
+                icon = <TrendingDown size={20} className="text-red-600" />;
+                break;
+              case "netBalance":
+                bgColor = v >= 0 ? "bg-green-100" : "bg-red-100";
+                textColor = v >= 0 ? "text-green-800" : "text-red-800";
+                icon = (
+                  <Users
+                    size={20}
+                    className={v >= 0 ? "text-green-600" : "text-red-600"}
+                  />
+                );
+                break;
+              default:
+                bgColor = "bg-gray-50";
+                textColor = "text-gray-800";
+            }
+
+            return (
+              <Paper
                 key={k}
-                className="p-4 rounded-xl bg-gray-50 flex flex-col items-center"
+                className={`${bgColor} p-5 flex flex-col items-center justify-center rounded-xl shadow hover:shadow-md transition`}
               >
-                <Typography className="capitalize text-sm text-gray-600">
-                  {k.replace(/([A-Z])/g, " $1")}
+                <Box className="flex items-center gap-2 mb-2">
+                  {icon}
+                  <Typography className="text-sm font-medium">
+                    {summaryLabels[k] || k}
+                  </Typography>
+                </Box>
+                <Typography className={`font-bold text-2xl ${textColor}`}>
+                  {typeof v === "number" ? formatAmount(v) : v}
                 </Typography>
-                <Typography className="font-bold text-lg">
-                  {typeof v === "number" ? `$${v}` : v}
-                </Typography>
-              </Box>
-            ))}
-          </Box>
-        </Paper>
+              </Paper>
+            );
+          })}
+        </Box>
       </TabPanel>
 
+      {/* Net Balances Tab */}
       <TabPanel value={tab} index={1}>
-        {Object.values(netBalances).map((b, idx) => (
+        {sortedNetBalances.map((b, idx) => (
           <Paper
             key={idx}
-            className="p-5 rounded-2xl shadow-sm border border-gray-200 mb-3"
+            className="p-5 rounded-2xl shadow-sm border border-gray-200 mb-3 flex items-center gap-4 hover:shadow-md transition"
           >
-            <Box className="flex justify-between items-center">
-              <Box>
-                <Typography className="font-medium">
-                  {b.person?.name} — {b.group?.name}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  You owe: ${b.userOwes} • They owe: ${b.theyOwe}
-                </Typography>
-              </Box>
+            <Avatar
+              src={b.person?.profilePicUrl}
+              alt={b.person?.name}
+              sx={{ width: 56, height: 56 }}
+            />
+            <Box flex={1}>
+              <Typography className="font-semibold text-lg">
+                {b.person?.name}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {b.group?.name} • You owe: {formatAmount(b.userOwes)} • They
+                owe: {formatAmount(b.theyOwe)}
+              </Typography>
+            </Box>
+            <Box className="flex flex-col items-center justify-center gap-1">
+              <Chip
+                label={b.netAmount >= 0 ? "You are owed" : "You owe"}
+                color={b.netAmount >= 0 ? "success" : "error"}
+                sx={{ fontWeight: "bold", fontSize: 12 }}
+              />
               <Typography
-                className={`font-bold ${
-                  b.netAmount < 0 ? "text-red-600" : "text-green-600"
+                className={`font-bold text-xl ${
+                  b.netAmount >= 0 ? "text-green-700" : "text-red-700"
                 }`}
               >
-                {b.netAmount < 0 ? "-" : "+"}${Math.abs(b.netAmount)}
+                {b.netAmount >= 0 ? "+" : "-"}
+                {formatAmount(Math.abs(b.netAmount))}
               </Typography>
             </Box>
           </Paper>
         ))}
       </TabPanel>
 
+      {/* People Who Owe You */}
       <TabPanel value={tab} index={2}>
-        {Object.values(peopleWhoOweUser).map((p, idx) => (
-          <Paper
-            key={idx}
-            className="p-5 rounded-2xl shadow-sm border border-gray-200 mb-3"
-          >
-            <Typography className="font-medium mb-2">
-              {p.person?.name} — {p.group?.name}
-            </Typography>
-            <Typography variant="body2" color="text.secondary" className="mb-2">
-              Total Owed: ${p.totalAmount} • {p.expenseCount} expenses
-            </Typography>
-            <Divider className="mb-2" />
-            {p.expenses?.map((e, i) => (
-              <Box
-                key={i}
-                className="flex justify-between text-sm text-gray-700 mb-1"
-              >
-                <span>{e.description}</span>
-                <span>${e.debtAmount}</span>
+        {Object.values(peopleWhoOweUser).length > 0 ? (
+          Object.values(peopleWhoOweUser).map((p, idx) => (
+            <Paper
+              key={idx}
+              className="p-5 rounded-2xl shadow-sm border border-gray-200 mb-3 hover:shadow-md transition"
+            >
+              <Box className="flex items-center gap-2 mb-2">
+                <Avatar src={p.person?.profilePicUrl} alt={p.person?.name} />
+                <Typography className="font-medium">
+                  {p.person?.name} — {p.group?.name}
+                </Typography>
               </Box>
-            ))}
-          </Paper>
-        ))}
-      </TabPanel>
-
-      <TabPanel value={tab} index={3}>
-        {Object.values(peopleUserOwes).map((p, idx) => (
-          <Paper
-            key={idx}
-            className="p-5 rounded-2xl shadow-sm border border-gray-200 mb-3"
-          >
-            <Typography className="font-medium mb-2">
-              {p.person?.name} — {p.group?.name}
-            </Typography>
-            <Typography variant="body2" color="text.secondary" className="mb-2">
-              Total You Owe: ${p.totalAmount} • {p.expenseCount} expenses
-            </Typography>
-            <Divider className="mb-2" />
-            {p.expenses?.map((e, i) => (
-              <Box
-                key={i}
-                className="flex justify-between text-sm text-gray-700 mb-1"
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                className="mb-2"
               >
-                <span>{e.description}</span>
-                <span>${e.debtAmount}</span>
-              </Box>
-            ))}
-          </Paper>
-        ))}
-      </TabPanel>
-
-      <TabPanel value={tab} index={4}>
-        {settlementSuggestion.length > 0 ? (
-          <Paper className="p-6 rounded-2xl shadow-sm border border-gray-200">
-            <Typography className="mb-3 font-medium">
-              Settlement Suggestions
-            </Typography>
-            <ul className="list-disc pl-5 text-gray-700">
-              {settlementSuggestion.map((s, i) => (
-                <li key={i}>{s}</li>
+                Total Owed: {formatAmount(p.totalAmount)} • {p.expenseCount}{" "}
+                expenses
+              </Typography>
+              <Divider className="mb-2" />
+              {p.expenses?.map((e, i) => (
+                <Box
+                  key={i}
+                  className={`flex justify-between items-center p-2 mb-1 rounded ${
+                    e.isOverdue
+                      ? "border-l-4 border-red-600 bg-red-50"
+                      : "border-l-4 border-green-50"
+                  }`}
+                >
+                  <span className="text-sm">
+                    {e.description} (
+                    {isValid(parseISO(e.expenseDate))
+                      ? format(parseISO(e.expenseDate), "PP")
+                      : e.expenseDate}
+                    )
+                  </span>
+                  <span className="font-semibold">
+                    {formatAmount(e.debtAmount)}
+                  </span>
+                </Box>
               ))}
-            </ul>
-          </Paper>
+            </Paper>
+          ))
         ) : (
-          <Typography>No settlement suggestions available.</Typography>
+          <Typography className="mt-4">No debts.</Typography>
         )}
       </TabPanel>
 
+      {/* People You Owe */}
+      <TabPanel value={tab} index={3}>
+        {Object.values(peopleUserOwes).length > 0 ? (
+          Object.values(peopleUserOwes).map((p, idx) => (
+            <Paper
+              key={idx}
+              className="p-5 rounded-2xl shadow-sm border border-gray-200 mb-3 hover:shadow-md transition"
+            >
+              <Box className="flex items-center gap-2 mb-2">
+                <Avatar src={p.person?.profilePicUrl} alt={p.person?.name} />
+                <Typography className="font-medium">
+                  {p.person?.name} — {p.group?.name}
+                </Typography>
+              </Box>
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                className="mb-2"
+              >
+                Total You Owe: {formatAmount(p.totalAmount)} • {p.expenseCount}{" "}
+                expenses
+              </Typography>
+              <Divider className="mb-2" />
+              {p.expenses?.map((e, i) => (
+                <Box
+                  key={i}
+                  className={`flex justify-between items-center p-2 mb-1 rounded ${
+                    e.isOverdue
+                      ? "border-l-4 border-red-600 bg-red-50 text-red-700"
+                      : "border-l-4 border-green-600 bg-green-50 text-green-700"
+                  }`}
+                >
+                  <span className="text-sm">
+                    {e.description} (
+                    {isValid(parseISO(e.expenseDate))
+                      ? format(parseISO(e.expenseDate), "PP")
+                      : e.expenseDate}
+                    )
+                  </span>
+                  <span className="font-semibold">
+                    {formatAmount(e.debtAmount)}
+                  </span>
+                </Box>
+              ))}
+            </Paper>
+          ))
+        ) : (
+          <Typography className="mt-4">No debts.</Typography>
+        )}
+      </TabPanel>
+
+      {/* Settlement Suggestions */}
+      <TabPanel value={tab} index={4}>
+        {settlementSuggestion.length > 0 ? (
+          <Box className="mt-4 grid grid-cols-1 gap-3">
+            {settlementSuggestion.map((s, i) => (
+              <Paper
+                key={i}
+                className="p-4 flex justify-between items-center rounded-xl shadow hover:shadow-md transition border border-gray-200"
+              >
+                <Typography>{s}</Typography>
+                <Button
+                  size="small"
+                  variant="contained"
+                  sx={{ bgcolor: "black", "&:hover": { bgcolor: "#333" } }}
+                  onClick={() =>
+                    navigate(
+                      `/settlements/settle/create/${s.groupId}/${s.toUserId}`
+                    )
+                  }
+                >
+                  Settle Now
+                </Button>
+              </Paper>
+            ))}
+          </Box>
+        ) : (
+          <Typography className="mt-4">
+            No settlement suggestions available.
+          </Typography>
+        )}
+      </TabPanel>
+
+      {/* Chart */}
       <TabPanel value={tab} index={5}>
-        <DebtChart netBalances={Object.values(netBalances)} />
+        <DebtChart netBalances={sortedNetBalances} />
       </TabPanel>
     </Container>
   );

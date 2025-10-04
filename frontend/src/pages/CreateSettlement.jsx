@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate, useLocation, useParams } from "react-router-dom";
 import {
   Container,
   Card,
@@ -12,7 +12,6 @@ import {
   Box,
   Alert,
   CircularProgress,
-  InputAdornment,
   Divider,
 } from "@mui/material";
 import { motion } from "framer-motion";
@@ -29,22 +28,115 @@ import { toast } from "react-hot-toast";
 const API_BASE_URL = "http://localhost:3005/api";
 
 export default function CreateSettlement() {
+  console.log("CreateSettlement rendered");
   const navigate = useNavigate();
   const location = useLocation();
+  const { groupId: initialGroupId, toUserId: initialOtherUserId } = useParams();
 
-  // Extract groupId and otherUserId from query params
-  const queryParams = new URLSearchParams(location.search);
-  const initialGroupId = queryParams.get("groupId") || "";
-  const initialOtherUserId = queryParams.get("otherUserId") || "";
-
+  const [groupName, setGroupName] = useState("");
+  const [otherUserName, setOtherUserName] = useState("");
   const [form, setForm] = useState({
     groupId: initialGroupId,
     otherUserId: initialOtherUserId,
     amount: "",
     notes: "",
   });
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+
+  // Fetch group name
+  useEffect(() => {
+    if (!initialGroupId) return;
+
+    const fetchGroupName = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/groups/${initialGroupId}`, {
+          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+          credentials: "include",
+        });
+        const json = await res.json();
+        if (json.success && json.data.group?.name) {
+          setGroupName(json.data.group.name);
+        } else {
+          setGroupName("Group");
+        }
+      } catch (err) {
+        console.error("Failed to fetch group name:", err);
+        setGroupName("Group");
+      }
+    };
+
+    fetchGroupName();
+  }, [initialGroupId]);
+
+  // Fetch members and find the other user's name
+  useEffect(() => {
+    console.log("useEffect triggered", { initialGroupId, initialOtherUserId });
+
+    const fetchMembers = async () => {
+      try {
+        const res = await fetch(
+          `${API_BASE_URL}/groups/members/${initialGroupId}`,
+          { credentials: "include" }
+        );
+        const json = await res.json();
+        console.log("Members response:", json);
+        console.log("other user id:", initialOtherUserId);
+        if (json.success && Array.isArray(json.data.members)) {
+          const member = json.data.members.find((m) => {
+            m.id.toString().trim() === initialOtherUserId.toString().trim();
+            console.log("Checking member:", m);
+            console.log(
+              m.id.toString().trim() === initialOtherUserId.toString().trim()
+            );
+          });
+          console.log("Found member:", member);
+
+          if (member) {
+            setOtherUserName(`${member.firstName} ${member.lastName}`);
+          } else {
+            setOtherUserName("Unknown User");
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch members:", err);
+        setOtherUserName("Unknown User");
+      }
+    };
+
+    if (initialGroupId) fetchMembers();
+  }, [initialGroupId, initialOtherUserId]);
+
+  // Auto-fill amount if known
+  useEffect(() => {
+    if (!initialGroupId || !initialOtherUserId) return;
+
+    const fetchAmount = async () => {
+      try {
+        const res = await fetch(
+          `${API_BASE_URL}/debt/${initialGroupId}/detailed`,
+          { credentials: "include" }
+        );
+        const json = await res.json();
+        if (
+          json.success &&
+          json.data.peopleUserOwes &&
+          json.data.peopleUserOwes[initialOtherUserId]
+        ) {
+          setForm((f) => ({
+            ...f,
+            amount:
+              json.data.peopleUserOwes[initialOtherUserId].totalAmount || "",
+          }));
+        }
+      } catch (err) {
+        console.warn("Could not auto-fill amount:", err);
+      }
+    };
+
+    fetchAmount();
+  }, [initialGroupId, initialOtherUserId]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -53,6 +145,12 @@ export default function CreateSettlement() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    if (!form.amount || Number(form.amount) <= 0) {
+      toast.error("Amount must be greater than 0");
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
@@ -75,7 +173,7 @@ export default function CreateSettlement() {
         throw new Error(json.message || "Failed to create settlement");
 
       toast.success("Settlement created successfully!");
-      navigate("/debt"); // redirect back after success
+      navigate("/debt");
     } catch (err) {
       const errorMsg = err.message || "Unknown error";
       setError(errorMsg);
@@ -90,7 +188,7 @@ export default function CreateSettlement() {
       {/* Page Header */}
       <Box className="mb-6">
         <Button
-          startIcon={<ArrowLeft className="w-4 h-4" />}
+          startIcon={<ArrowLeft />}
           onClick={() => navigate(-1)}
           sx={{ textTransform: "none", mb: 2 }}
         >
@@ -105,7 +203,7 @@ export default function CreateSettlement() {
         </Typography>
       </Box>
 
-      {/* Main Card */}
+      {/* Card Form */}
       <Card
         component={motion.div}
         initial={{ opacity: 0, y: 8 }}
@@ -121,40 +219,25 @@ export default function CreateSettlement() {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Group + Other User */}
+            {/* Group & User */}
             <Box className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               <TextField
-                name="groupId"
-                label="Group ID"
-                value={form.groupId}
-                onChange={handleChange}
-                required
+                label="Group"
+                value={groupName}
                 fullWidth
                 InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <Users className="w-4 h-4 text-gray-500" />
-                    </InputAdornment>
-                  ),
+                  readOnly: true,
+                  startAdornment: <Users className="w-4 h-4 text-gray-500" />,
                 }}
-                placeholder="Enter group ID"
               />
-
               <TextField
-                name="otherUserId"
-                label="Other User ID"
-                value={form.otherUserId}
-                onChange={handleChange}
-                required
+                label="User"
+                value={otherUserName}
                 fullWidth
                 InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <User className="w-4 h-4 text-gray-500" />
-                    </InputAdornment>
-                  ),
+                  readOnly: true,
+                  startAdornment: <User className="w-4 h-4 text-gray-500" />,
                 }}
-                placeholder="Enter user ID"
               />
             </Box>
 
@@ -169,9 +252,7 @@ export default function CreateSettlement() {
               fullWidth
               InputProps={{
                 startAdornment: (
-                  <InputAdornment position="start">
-                    <DollarSign className="w-4 h-4 text-gray-500" />
-                  </InputAdornment>
+                  <DollarSign className="w-4 h-4 text-gray-500" />
                 ),
               }}
               placeholder="0.00"
@@ -190,12 +271,10 @@ export default function CreateSettlement() {
               rows={3}
               InputProps={{
                 startAdornment: (
-                  <InputAdornment position="start">
-                    <FileText className="w-4 h-4 text-gray-500 self-start mt-3" />
-                  </InputAdornment>
+                  <FileText className="w-4 h-4 text-gray-500 self-start mt-3" />
                 ),
               }}
-              placeholder="Add any additional notes about this settlement..."
+              placeholder="Add any additional notes..."
               sx={{ mb: 4 }}
             />
 
@@ -236,9 +315,7 @@ export default function CreateSettlement() {
                   height: "44px",
                   backgroundColor: "black",
                   color: "white",
-                  "&:hover": {
-                    backgroundColor: "#333", // softer black on hover
-                  },
+                  "&:hover": { backgroundColor: "#333" },
                 }}
                 startIcon={
                   loading ? (
