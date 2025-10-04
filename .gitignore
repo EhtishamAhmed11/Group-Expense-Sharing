@@ -1,2 +1,49 @@
 .env
 node_modules
+# Node / JS
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+# (but you can keep package-lock.json if you prefer discipline over ignoring)
+
+# Environment / secrets
+.env
+.env.*
+.secret
+*.local
+
+# Build output
+dist/
+build/
+.next/
+out/
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+logs
+*.log
+pids
+*.pid
+*.seed
+
+# Database / dumps
+*.sqlite
+*.db
+*.sql
+dump.sql
+
+# Redis persistence
+dump.rdb
+appendonly.aof
+
+# Misc
+coverage/
