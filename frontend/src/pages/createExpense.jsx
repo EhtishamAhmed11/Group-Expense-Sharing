@@ -13,7 +13,11 @@ import {
   Paper,
   Box,
   Grid,
+  Switch,
+  FormControlLabel,
 } from "@mui/material";
+import { ToastContainer, toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 const CreateExpense = () => {
   const { groupId } = useParams();
@@ -26,13 +30,14 @@ const CreateExpense = () => {
   const [payerId, setPayerId] = useState("");
   const [splitType, setSplitType] = useState("equal");
   const [splitDetails, setSplitDetails] = useState([]);
+  const [hasMultiplePayers, setHasMultiplePayers] = useState(false);
+  const [payerDetails, setPayerDetails] = useState([]);
 
   // Data state
   const [categories, setCategories] = useState([]);
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Fetch categories + members
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -45,17 +50,15 @@ const CreateExpense = () => {
           }),
         ]);
 
-        if (!catRes.ok || !memRes.ok) {
-          throw new Error("Failed to fetch categories or members");
-        }
+        if (!catRes.ok || !memRes.ok) throw new Error("Failed to fetch data");
 
         const categoriesData = await catRes.json();
         const membersData = await memRes.json();
-        console.log(membersData);
+
         setCategories(categoriesData.data?.categories || []);
         setMembers(membersData.data?.members || []);
       } catch (error) {
-        console.error("Error fetching data:", error);
+        toast.error("Failed to load categories or members");
       } finally {
         setLoading(false);
       }
@@ -64,45 +67,69 @@ const CreateExpense = () => {
     fetchData();
   }, [groupId]);
 
-  // Handle split detail input changes
+  // Handle split inputs
   const handleSplitChange = (userId, value) => {
     setSplitDetails((prev) => {
       const updated = [...prev];
       const index = updated.findIndex((d) => d.user_id === userId);
-      if (index !== -1) {
-        updated[index].value = value;
-      } else {
-        updated.push({ user_id: userId, value });
-      }
+      if (index !== -1) updated[index].value = value;
+      else updated.push({ user_id: userId, value });
+      return updated;
+    });
+  };
+
+  // Handle payer inputs
+  const handlePayerChange = (userId, value) => {
+    setPayerDetails((prev) => {
+      const updated = [...prev];
+      const index = updated.findIndex((p) => p.user_id === userId);
+      if (index !== -1) updated[index].amount_paid = value;
+      else updated.push({ user_id: userId, amount_paid: value });
       return updated;
     });
   };
 
   // Validation
   const validateForm = () => {
-    if (!description || !amount || !category || !payerId) {
-      alert("Please fill all required fields.");
+    if (!description || !amount || !category) {
+      toast.error("Please fill all required fields.");
       return false;
     }
 
+    if (!hasMultiplePayers && !payerId) {
+      toast.error("Please select a payer.");
+      return false;
+    }
+
+    if (hasMultiplePayers) {
+      const totalPaid = payerDetails.reduce(
+        (sum, p) => sum + parseFloat(p.amount_paid || 0),
+        0
+      );
+      if (totalPaid !== parseFloat(amount)) {
+        toast.error("Total paid amount must equal total expense amount.");
+        return false;
+      }
+    }
+
     if (splitType === "exact") {
-      const total = splitDetails.reduce(
+      const totalSplit = splitDetails.reduce(
         (sum, d) => sum + parseFloat(d.value || 0),
         0
       );
-      if (total !== parseFloat(amount)) {
-        alert("Exact split amounts must equal total amount.");
+      if (totalSplit !== parseFloat(amount)) {
+        toast.error("Exact split amounts must equal total amount.");
         return false;
       }
     }
 
     if (splitType === "percentage") {
-      const total = splitDetails.reduce(
+      const totalPercentage = splitDetails.reduce(
         (sum, d) => sum + parseFloat(d.value || 0),
         0
       );
-      if (total !== 100) {
-        alert("Percentage split must add up to 100%.");
+      if (totalPercentage !== 100) {
+        toast.error("Percentage split must add up to 100%.");
         return false;
       }
     }
@@ -139,9 +166,15 @@ const CreateExpense = () => {
       category_name: category,
       group_id: groupId,
       expense_type: "group",
-      payer_id: payerId,
       split_type: splitType,
       split_details: finalSplit,
+      has_multiple_payers: hasMultiplePayers,
+      payer_details: hasMultiplePayers
+        ? payerDetails.map((p) => ({
+            user_id: p.user_id,
+            amount_paid: parseFloat(p.amount_paid),
+          }))
+        : [{ user_id: payerId, amount_paid: parseFloat(amount) }],
     };
 
     try {
@@ -154,19 +187,19 @@ const CreateExpense = () => {
             "Content-Type": "application/json",
           },
           body: JSON.stringify(payload),
-
           credentials: "include",
         }
       );
       const data = await res.json();
+
       if (data.success) {
-        alert("Expense added successfully!");
-        navigate(`/groups/${groupId}/expenses`);
+        toast.success("Expense added successfully!");
+        setTimeout(() => navigate(`/groups/${groupId}/expenses`), 1200);
       } else {
-        alert(data.message || "Failed to add expense");
+        toast.error(data.message || "Failed to add expense");
       }
     } catch (error) {
-      console.error("Error creating expense:", error);
+      toast.error("Something went wrong while creating expense.");
     }
   };
 
@@ -180,6 +213,7 @@ const CreateExpense = () => {
 
   return (
     <Box p={4} display="flex" justifyContent="center">
+      <ToastContainer />
       <Paper elevation={3} sx={{ p: 4, width: "700px" }}>
         <Typography variant="h5" gutterBottom>
           Add Expense
@@ -220,21 +254,63 @@ const CreateExpense = () => {
           </Select>
         </FormControl>
 
-        {/* Payer */}
-        <FormControl fullWidth margin="normal">
-          <InputLabel>Payer</InputLabel>
-          <Select
-            value={payerId}
-            label="Payer"
-            onChange={(e) => setPayerId(e.target.value)}
-          >
-            {members.map((m) => (
-              <MenuItem key={m.id} value={m.id}>
-                {m.name}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
+        {/* Multiple Payers Toggle */}
+        <FormControlLabel
+          control={
+            <Switch
+              checked={hasMultiplePayers}
+              onChange={(e) => setHasMultiplePayers(e.target.checked)}
+              color="primary"
+            />
+          }
+          label="Multiple Payers"
+        />
+
+        {/* Payer Section */}
+        {hasMultiplePayers ? (
+          <Box mt={2}>
+            <Typography variant="subtitle1" gutterBottom>
+              Who Paid (Payer Details)
+            </Typography>
+            <Grid container spacing={2}>
+              {members.map((m) => (
+                <Grid
+                  item
+                  xs={12}
+                  sm={6}
+                  key={m.id}
+                  display="flex"
+                  alignItems="center"
+                  justifyContent="space-between"
+                >
+                  <Typography>{m.name}</Typography>
+                  <TextField
+                    type="number"
+                    placeholder="Amount Paid"
+                    size="small"
+                    sx={{ width: "120px" }}
+                    onChange={(e) => handlePayerChange(m.id, e.target.value)}
+                  />
+                </Grid>
+              ))}
+            </Grid>
+          </Box>
+        ) : (
+          <FormControl fullWidth margin="normal">
+            <InputLabel>Payer</InputLabel>
+            <Select
+              value={payerId}
+              label="Payer"
+              onChange={(e) => setPayerId(e.target.value)}
+            >
+              {members.map((m) => (
+                <MenuItem key={m.id} value={m.id}>
+                  {m.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        )}
 
         {/* Split Type */}
         <FormControl fullWidth margin="normal">
@@ -250,11 +326,11 @@ const CreateExpense = () => {
           </Select>
         </FormControl>
 
-        {/* Extra Inputs */}
+        {/* Split Details */}
         {(splitType === "exact" || splitType === "percentage") && (
           <Box mt={2}>
             <Typography variant="subtitle1" gutterBottom>
-              Enter {splitType === "exact" ? "Amounts" : "Percentages"}
+              How to Split ({splitType === "exact" ? "Amounts" : "Percentages"})
             </Typography>
             <Grid container spacing={2}>
               {members.map((m) => (

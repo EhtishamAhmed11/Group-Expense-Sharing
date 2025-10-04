@@ -63,7 +63,7 @@ const GroupExpenses = () => {
   const [members, setMembers] = useState([]);
   const [categoryOptions, setCategoryOptions] = useState([]);
 
-  // ✅ Fetch expenses
+  // Fetch expenses
   const fetchExpenses = async () => {
     try {
       setLoading(true);
@@ -78,8 +78,6 @@ const GroupExpenses = () => {
       );
 
       const data = await res.json();
-      console.log("Fetched expenses:", data);
-
       if (data.success) {
         setExpenses(data.data.expenses || []);
         setSummary(data.data.summary || null);
@@ -88,7 +86,7 @@ const GroupExpenses = () => {
           setPage(data.data.pagination.currentPage);
         }
       } else {
-        toast.error("Failed to fetch expenses");
+        toast.error(data.message || "Failed to fetch expenses");
       }
     } catch (err) {
       console.error(err);
@@ -98,7 +96,7 @@ const GroupExpenses = () => {
     }
   };
 
-  // ✅ Fetch group members & categories
+  // Fetch group members & categories
   const fetchGroupDetails = async () => {
     try {
       const [membersRes, categoriesRes] = await Promise.all([
@@ -113,10 +111,11 @@ const GroupExpenses = () => {
       ]);
 
       const membersData = await membersRes.json();
+      console.log(membersData);
       const categoriesData = await categoriesRes.json();
 
       if (membersData.success) {
-        setMembers(membersData.data || []);
+        setMembers(membersData.data?.members || []);
       }
 
       if (categoriesData.success) {
@@ -342,9 +341,18 @@ const GroupExpenses = () => {
                       />
                       <Chip
                         icon={<User className="w-4 h-4" />}
-                        label={`Paid by: ${exp?.payer_first_name ?? ""} ${
-                          exp?.payer_last_name ?? ""
-                        }`}
+                        label={
+                          exp?.has_multiple_payers
+                            ? `Paid by: ${exp?.payer_details
+                                .map(
+                                  (p) =>
+                                    `${p.first_name} ${p.last_name} ($${p.amount_paid})`
+                                )
+                                .join(", ")}`
+                            : `Paid by: ${exp?.payer_first_name ?? ""} ${
+                                exp?.payer_last_name ?? ""
+                              }`
+                        }
                         size="small"
                         sx={{
                           borderColor: "black",
@@ -393,9 +401,38 @@ const GroupExpenses = () => {
                     </Typography>
                   )}
                   {exp?.category_description && (
-                    <Typography variant="body2" className="text-gray-500">
+                    <Typography variant="body2" className="text-gray-500 mb-2">
                       Category Details: {exp.category_description}
                     </Typography>
+                  )}
+                  {/* Show Split Details */}
+                  {exp?.split_details?.length > 0 && (
+                    <Box mt={2}>
+                      <Typography variant="subtitle2" className="mb-1">
+                        Split Details:
+                      </Typography>
+                      <Grid container spacing={1}>
+                        {exp.split_details.map((s) => {
+                          const member = members.find(
+                            (m) => m.id === s.user_id
+                          );
+                          return (
+                            <Grid item key={s.user_id} xs={6} sm={4}>
+                              <Chip
+                                label={`${member?.first_name ?? "Unknown"} ${
+                                  member?.last_name ?? ""
+                                }: $${s.amount}`}
+                                size="small"
+                                sx={{
+                                  border: "1px solid black",
+                                  color: "black",
+                                }}
+                              />
+                            </Grid>
+                          );
+                        })}
+                      </Grid>
+                    </Box>
                   )}
                 </CardContent>
               </Card>

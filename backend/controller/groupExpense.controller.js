@@ -1,4 +1,3 @@
-
 import { pool } from "../connections/db.js";
 import { cacheService } from "../utils/cache.js";
 
@@ -870,8 +869,6 @@ export const createGroupExpense = async (req, res) => {
   }
 };
 
-
-
 export const getGroupExpense = async (req, res) => {
   let client;
   try {
@@ -891,6 +888,7 @@ export const getGroupExpense = async (req, res) => {
       });
     }
 
+    // Pagination & filters
     let {
       page = 1,
       limit = 10,
@@ -908,10 +906,7 @@ export const getGroupExpense = async (req, res) => {
     } = req.query;
 
     page = parseInt(page) || 1;
-    limit = parseInt(limit) || 10;
-    if (page < 1) page = 1;
-    if (limit < 1) limit = 10;
-    if (limit > 50) limit = 50;
+    limit = Math.min(Math.max(parseInt(limit) || 10, 1), 50);
     const offset = (page - 1) * limit;
 
     const allowedSortFields = [
@@ -921,11 +916,10 @@ export const getGroupExpense = async (req, res) => {
       "created_at",
       "updated_at",
     ];
-    if (!allowedSortFields.includes(sortBy)) {
-      sortBy = "expense_date";
-    }
+    if (!allowedSortFields.includes(sortBy)) sortBy = "expense_date";
     sortOrder = sortOrder.toUpperCase() === "ASC" ? "ASC" : "DESC";
 
+    // Cache key
     const cacheKey = `group_expenses:${groupId}:${page}:${limit}:${search}:${sortBy}:${sortOrder}:${category}:${paidBy}:${dateFrom}:${dateTo}:${minAmount}:${maxAmount}:${settlementStatus}:${userRole}`;
     try {
       const cachedData = await cacheService.client.get(cacheKey);
@@ -944,9 +938,12 @@ export const getGroupExpense = async (req, res) => {
 
     client = await pool.connect();
 
-    const groupQuery = `SELECT id, name, description, invite_code, member_count, created_by, created_at
-                        FROM groups WHERE id = $1 AND is_active = true`;
-    const groupResult = await client.query(groupQuery, [groupId]);
+    // Get group info
+    const groupResult = await client.query(
+      `SELECT id, name, description, invite_code, member_count, created_by, created_at
+       FROM groups WHERE id = $1 AND is_active = true`,
+      [groupId]
+    );
     if (groupResult.rows.length === 0) {
       return res.status(404).json({
         success: false,
@@ -956,6 +953,7 @@ export const getGroupExpense = async (req, res) => {
     }
     const group = groupResult.rows[0];
 
+    // WHERE clause for expenses
     let whereClause = `WHERE e.group_id = $1 AND e.expense_type = 'group'`;
     let queryParams = [groupId];
     let paramIndex = 2;
@@ -965,13 +963,11 @@ export const getGroupExpense = async (req, res) => {
       queryParams.push(`%${search.trim()}%`);
       paramIndex++;
     }
-
     if (category.trim()) {
       whereClause += ` AND ec.name ILIKE $${paramIndex}`;
       queryParams.push(`%${category.trim()}%`);
       paramIndex++;
     }
-
     if (paidBy.trim()) {
       whereClause += ` AND (
         LOWER(u_payer.first_name) LIKE LOWER($${paramIndex}) OR 
@@ -981,7 +977,6 @@ export const getGroupExpense = async (req, res) => {
       queryParams.push(`%${paidBy.trim()}%`);
       paramIndex++;
     }
-
     if (dateFrom.trim()) {
       whereClause += ` AND e.expense_date >= $${paramIndex}`;
       queryParams.push(dateFrom.trim());
@@ -992,7 +987,6 @@ export const getGroupExpense = async (req, res) => {
       queryParams.push(dateTo.trim());
       paramIndex++;
     }
-
     if (minAmount && !isNaN(parseFloat(minAmount))) {
       whereClause += ` AND e.amount >= $${paramIndex}`;
       queryParams.push(parseFloat(minAmount));
@@ -1003,19 +997,19 @@ export const getGroupExpense = async (req, res) => {
       queryParams.push(parseFloat(maxAmount));
       paramIndex++;
     }
-
     if (settlementStatus === "settled") {
       whereClause += ` AND e.is_settled = true`;
     } else if (settlementStatus === "pending") {
       whereClause += ` AND e.is_settled = false`;
     }
+
+    // Get expenses
     const expensesQuery = `
       SELECT 
         e.id as expense_id, e.amount, e.description, e.category_id,
         e.expense_date, e.created_by, e.paid_by, e.split_type,
-        e.is_settled, e.created_at, e.updated_at, e.notes,
-        ec.id as category_id, ec.name as category_name, ec.description as category_description,
-        ec.color as category_color, ec.icon as category_icon,
+        e.has_multiple_payers, e.is_settled, e.created_at, e.updated_at, e.notes,
+        ec.name as category_name, ec.color as category_color, ec.icon as category_icon,
         u_payer.first_name as payer_first_name, u_payer.last_name as payer_last_name, u_payer.email as payer_email,
         u_creator.first_name as creator_first_name, u_creator.last_name as creator_last_name
       FROM expenses e
@@ -1027,7 +1021,7 @@ export const getGroupExpense = async (req, res) => {
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
     `;
     queryParams.push(limit, offset);
-    console.log(`WHERE CLAUSE:${whereClause}`);
+
     const countQuery = `
       SELECT COUNT(*) as total_count
       FROM expenses e
@@ -1041,12 +1035,48 @@ export const getGroupExpense = async (req, res) => {
       client.query(countQuery, queryParams.slice(0, paramIndex - 1)),
     ]);
 
+    const expenses = expensesResult.rows;
+
+    // Fetch split details and payer details for each expense
+    for (const expense of expenses) {
+      // Split participants
+      const splitRes = await client.query(
+        `SELECT ep.user_id, u.first_name, u.last_name, ep.amount_owed, ep.percentage
+         FROM expense_participants ep
+         LEFT JOIN users u ON ep.user_id = u.id
+         WHERE ep.expense_id = $1`,
+        [expense.expense_id]
+      );
+      expense.split_details = splitRes.rows;
+
+      // Payers (if multiple)
+      if (expense.has_multiple_payers) {
+        const payerRes = await client.query(
+          `SELECT ep.user_id, u.first_name, u.last_name, ep.amount_paid
+           FROM expense_payers ep
+           LEFT JOIN users u ON ep.user_id = u.id
+           WHERE ep.expense_id = $1`,
+          [expense.expense_id]
+        );
+        expense.payer_details = payerRes.rows;
+      } else {
+        expense.payer_details = [
+          {
+            user_id: expense.paid_by,
+            first_name: expense.payer_first_name,
+            last_name: expense.payer_last_name,
+            amount_paid: expense.amount,
+          },
+        ];
+      }
+    }
+
     const totalExpenses = parseInt(countResult.rows[0].total_count);
     const totalPages = Math.ceil(totalExpenses / limit);
 
     const responseData = {
       group,
-      expenses: expensesResult.rows,
+      expenses,
       pagination: {
         currentPage: page,
         totalPages,
